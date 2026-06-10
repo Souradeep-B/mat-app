@@ -1,0 +1,14 @@
+# MAT — Streamlit configuration
+
+[server]
+# Disable the file watcher entirely so the "Source file changed → Rerun /
+# Always rerun" prompt never appears in the toolbar. Edits require a manual
+# browser refresh (which is the normal workflow here).
+fileWatcherType = "none"
+runOnSave = false
+
+[client]
+# Keep the Deploy button and the ⋮ main menu (default developer toolbar).
+toolbarMode = "auto"
+# Don't surface Python tracebacks in the toolbar as toast errors.
+showErrorDetails = true

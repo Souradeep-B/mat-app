@@ -1,0 +1,44 @@
+# ── Secrets & credentials — NEVER commit these ──────────────────────────────
+.env
+google_credentials.json
+.streamlit/secrets.toml
+
+# ── Local database (cloud uses Supabase/Postgres instead) ───────────────────
+*.db
+marketing_automation.db
+
+# ── Logs & scratch ──────────────────────────────────────────────────────────
+*.log
+ngrok.log
+streamlit_run.log
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# ── OS / editor ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Audience data / PII / generated artifacts — NEVER commit ────────────────
+*.csv
+*.pkl
+*_Audience_Report.html
+*_Delivery_Report.html
+*_ROI_Report.html
+*_Audience*.html
+*_Report.pdf
+*Tracker.html
+campaign_*.json
+roi_*.json
+campaign_tracker.json
+*_log.txt
+_*.txt
+
+# ── Local Claude / tooling settings ─────────────────────────────────────────
+.claude/
