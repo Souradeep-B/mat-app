@@ -398,12 +398,47 @@ if (_IS_DEMO and not _logging_out and not st.session_state.get("auth_user")
 if _IS_DEMO:
     # ══ PATH B — Simulated login screen ═══════════════════════════════════════
     if not st.session_state.get("auth_user"):
-        # Clean full-screen login: hide sidebar + transparent header
+        # ── Login design system: ambient gradient canvas + elevated card ──────
         st.markdown("""
         <style>
           [data-testid="stSidebar"], [data-testid="collapsedControl"] {display:none !important;}
           [data-testid="stHeader"] {background:transparent !important;}
-          .block-container {padding-top:3rem !important;}
+          [data-testid="stToolbar"] {display:none !important;}
+
+          /* Deep-navy canvas with soft teal auras */
+          [data-testid="stAppViewContainer"] {
+            background:
+              radial-gradient(1100px 520px at 15% -10%, rgba(0,123,143,.38), transparent 60%),
+              radial-gradient(900px 520px at 110% 115%, rgba(53,196,215,.22), transparent 55%),
+              linear-gradient(160deg, #0A2540 0%, #0B1D33 60%, #081626 100%) !important;
+          }
+          .block-container {padding-top:9vh !important; max-width: 1100px;}
+
+          /* The login card — Streamlit bordered container, re-skinned */
+          [data-testid="stVerticalBlockBorderWrapper"] {
+            background:#FFFFFF !important;
+            border:1px solid rgba(255,255,255,.10) !important;
+            border-radius:22px !important;
+            padding:2.5rem 2.4rem 2.1rem !important;
+            box-shadow:
+              0 40px 90px rgba(2,12,27,.55),
+              0 12px 28px rgba(2,12,27,.38),
+              0 0 0 1px rgba(0,123,143,.18) !important;
+          }
+          [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {gap:0.55rem;}
+
+          /* Email input — large, soft, focused ring */
+          [data-baseweb="input"] {
+            border-radius:12px !important;
+            border:1.5px solid #E3E8EF !important;
+            background:#F8FAFC !important;
+          }
+          [data-baseweb="input"] input {height:46px !important; font-size:15px !important;}
+          [data-baseweb="input"]:focus-within {
+            border-color:#007B8F !important;
+            background:#FFFFFF !important;
+            box-shadow:0 0 0 4px rgba(0,123,143,.14) !important;
+          }
         </style>
         """, unsafe_allow_html=True)
 
@@ -416,84 +451,144 @@ if _IS_DEMO:
             )
 
         _step = st.session_state.get("_demo_step", "welcome")
-        _, _mid, _ = st.columns([1, 1.25, 1])
+        _, _mid, _ = st.columns([1, 1.08, 1])
         with _mid:
-            # ── MAT branding card ────────────────────────────────────────────
-            st.markdown("""
-            <div style="background:linear-gradient(135deg,#0a2540,#0d3060);
-                        border-radius:20px;padding:40px 40px 34px;text-align:center;
-                        box-shadow:0 12px 48px rgba(10,37,64,0.28);margin-bottom:24px;">
-              <div style="background:#007B8F;border-radius:14px;width:60px;height:60px;
-                          display:flex;align-items:center;justify-content:center;
-                          font-size:30px;font-weight:900;color:#fff;margin:0 auto 16px;
-                          box-shadow:0 4px 16px rgba(0,123,143,0.5);">M</div>
-              <div style="font-size:34px;font-weight:900;color:#fff;letter-spacing:6px;
-                          line-height:1;">MAT</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:2.5px;
-                          text-transform:uppercase;margin-top:8px;">
-                Marketing Automation Tool
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if _step == "welcome":
-                st.markdown(
-                    "<div style='text-align:center;font-size:1.15rem;font-weight:700;"
-                    "color:#111827;margin-bottom:4px;'>Welcome back</div>"
-                    "<div style='text-align:center;font-size:0.88rem;color:#6B7280;"
-                    "margin-bottom:22px;'>Sign in to continue to MAT</div>",
-                    unsafe_allow_html=True
-                )
-                # Google "G" logo
+            with st.container(border=True):
+                # ── Brand mark + heading ─────────────────────────────────────
                 st.markdown("""
-                <div style="display:flex;justify-content:center;margin-bottom:10px;">
-                  <svg width="26" height="26" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
+                <div style="text-align:center;">
+                  <div style="display:inline-flex;align-items:center;justify-content:center;
+                              width:64px;height:64px;border-radius:18px;
+                              background:linear-gradient(145deg,#00899F,#006B7D);
+                              box-shadow:0 10px 26px rgba(0,123,143,.45),
+                                         inset 0 1px 0 rgba(255,255,255,.25);
+                              font-size:30px;font-weight:800;color:#fff;
+                              margin-bottom:18px;">M</div>
+                  <div style="font-size:23px;font-weight:800;color:#0F172A;
+                              letter-spacing:-0.3px;">Welcome to MAT</div>
+                  <div style="font-size:13px;color:#64748B;margin-top:5px;">
+                    Marketing Automation Tool · Optum Engage
+                  </div>
+                  <div style="height:1px;background:linear-gradient(90deg,transparent,#E2E8F0,transparent);
+                              margin:22px 0 20px;"></div>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button("Sign in with Google", use_container_width=True,
-                             type="primary", key="demo_google_btn"):
-                    st.session_state["_demo_step"] = "email"
-                    st.rerun()
 
-            else:  # _step == "email"
-                st.markdown(
-                    "<div style='text-align:center;font-size:1.1rem;font-weight:700;"
-                    "color:#111827;margin-bottom:2px;'>Choose an account</div>"
-                    "<div style='text-align:center;font-size:0.85rem;color:#6B7280;"
-                    "margin-bottom:18px;'>to continue to MAT</div>",
-                    unsafe_allow_html=True
-                )
-                _em = st.text_input(
-                    "Email", placeholder=f"you@{ALLOWED_DOMAIN}",
-                    key="demo_email_in", label_visibility="collapsed"
-                )
-                _b1, _b2 = st.columns([1, 1])
-                with _b1:
-                    if st.button("← Back", use_container_width=True, key="demo_back"):
-                        st.session_state["_demo_step"] = "welcome"
+                if _step == "welcome":
+                    # Google-style "Sign in" button (white, bordered, G logo)
+                    st.markdown("""
+                    <style>
+                      [data-testid="stBaseButton-primary"] {
+                        background:#FFFFFF !important;
+                        border:1.5px solid #DADCE0 !important;
+                        color:#1F2937 !important;
+                        height:50px !important; min-height:50px !important;
+                        border-radius:13px !important;
+                        font-size:15px !important; font-weight:600 !important;
+                        box-shadow:0 1px 3px rgba(16,24,40,.08) !important;
+                        display:flex; align-items:center; justify-content:center;
+                        transition:all .18s ease;
+                      }
+                      [data-testid="stBaseButton-primary"] p {color:#1F2937 !important; font-size:15px !important;}
+                      [data-testid="stBaseButton-primary"]:hover {
+                        border-color:#007B8F !important;
+                        background:#F8FEFF !important;
+                        box-shadow:0 6px 18px rgba(0,123,143,.18) !important;
+                        transform:translateY(-1px);
+                      }
+                      [data-testid="stBaseButton-primary"]::before {
+                        content:""; display:inline-block; width:21px; height:21px;
+                        margin-right:11px; flex:0 0 auto;
+                        background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/><path fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/><path fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/><path fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/></svg>") no-repeat center / contain;
+                      }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    if st.button("Sign in", use_container_width=True,
+                                 type="primary", key="demo_google_btn"):
+                        st.session_state["_demo_step"] = "email"
                         st.rerun()
-                with _b2:
-                    if st.button("Continue", use_container_width=True,
-                                 type="primary", key="demo_continue"):
-                        _em = (_em or "").strip().lower()
-                        if not is_allowed_domain(_em):
-                            st.error(f"Please use a @{ALLOWED_DOMAIN} account.")
-                        else:
-                            _nm = _em.split("@")[0].replace(".", " ").title()
-                            upsert_user(_em, _nm, "")
-                            st.session_state["auth_user"] = get_user(_em)
-                            st.session_state.pop("_demo_step", None)
-                            st.rerun()
+                    st.markdown(
+                        "<div style='text-align:center;font-size:12px;color:#94A3B8;"
+                        "margin-top:14px;'>Use your Capillary Google account to continue</div>",
+                        unsafe_allow_html=True,
+                    )
 
+                else:  # _step == "email"
+                    # Teal CTA + ghost back button
+                    st.markdown("""
+                    <style>
+                      [data-testid="stBaseButton-primary"] {
+                        background:linear-gradient(135deg,#00899F,#006B7D) !important;
+                        border:none !important; color:#FFFFFF !important;
+                        height:46px !important; min-height:46px !important;
+                        border-radius:12px !important;
+                        font-size:14.5px !important; font-weight:700 !important;
+                        box-shadow:0 8px 20px rgba(0,123,143,.32) !important;
+                        transition:all .18s ease;
+                      }
+                      [data-testid="stBaseButton-primary"] p {color:#FFFFFF !important;}
+                      [data-testid="stBaseButton-primary"]:hover {
+                        box-shadow:0 12px 26px rgba(0,123,143,.42) !important;
+                        transform:translateY(-1px);
+                      }
+                      [data-testid="stBaseButton-secondary"] {
+                        background:transparent !important;
+                        border:1.5px solid #E3E8EF !important; color:#475569 !important;
+                        height:46px !important; min-height:46px !important;
+                        border-radius:12px !important;
+                        font-size:14.5px !important; font-weight:600 !important;
+                        box-shadow:none !important;
+                      }
+                      [data-testid="stBaseButton-secondary"]:hover {
+                        border-color:#94A3B8 !important; color:#0F172A !important;
+                        background:#F8FAFC !important;
+                      }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    st.markdown(
+                        "<div style='text-align:center;font-size:16px;font-weight:700;"
+                        "color:#0F172A;margin-bottom:2px;'>Choose your account</div>"
+                        "<div style='text-align:center;font-size:12.5px;color:#64748B;"
+                        "margin-bottom:16px;'>to continue to MAT</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _em = st.text_input(
+                        "Email", placeholder=f"you@{ALLOWED_DOMAIN}",
+                        key="demo_email_in", label_visibility="collapsed"
+                    )
+                    _b1, _b2 = st.columns([1, 1.4])
+                    with _b1:
+                        if st.button("← Back", use_container_width=True, key="demo_back"):
+                            st.session_state["_demo_step"] = "welcome"
+                            st.rerun()
+                    with _b2:
+                        if st.button("Continue →", use_container_width=True,
+                                     type="primary", key="demo_continue"):
+                            _em = (_em or "").strip().lower()
+                            if not is_allowed_domain(_em):
+                                st.error(f"Please use a @{ALLOWED_DOMAIN} account.")
+                            else:
+                                _nm = _em.split("@")[0].replace(".", " ").title()
+                                upsert_user(_em, _nm, "")
+                                st.session_state["auth_user"] = get_user(_em)
+                                st.session_state.pop("_demo_step", None)
+                                st.rerun()
+
+                # ── In-card footer ───────────────────────────────────────────
+                st.markdown(
+                    f"<div style='text-align:center;margin-top:20px;padding-top:16px;"
+                    f"border-top:1px solid #F1F5F9;font-size:11.5px;color:#94A3B8;'>"
+                    f"🔒 Access restricted to <b style='color:#64748B;'>@{ALLOWED_DOMAIN}</b> accounts"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Below-card copyright on the gradient
             st.markdown(
-                f"<div style='text-align:center;margin-top:22px;font-size:0.75rem;"
-                f"color:#9CA3AF;'>🔒 Access restricted to @{ALLOWED_DOMAIN} accounts</div>",
-                unsafe_allow_html=True
+                "<div style='text-align:center;margin-top:26px;font-size:11.5px;"
+                "color:rgba(201,216,232,.55);letter-spacing:.4px;'>"
+                "© 2026 Capillary Technologies · MAT</div>",
+                unsafe_allow_html=True,
             )
         st.stop()
 
@@ -2215,7 +2310,23 @@ elif selected == "3. Approval Gate":
 </html>"""
 
     # ── OPM-67 demo: use the curated sample audience report ───────────────────
-    if campaign.get("OPM Ticket", "").strip().upper() == "OPM-67":
+    # Detect the OPM-67 sample from any available signal — session ticket / WF /
+    # the DB campaign tied to this session — so the curated report always shows.
+    _is_opm67_ag = (
+        campaign.get("OPM Ticket", "").strip().upper() == "OPM-67"
+        or _ag_ctx.get("WF Number", "").strip() in ("WF22031341",
+            "WF20318902_Valero_2026_Optum_Engage_Incentives0_99")
+    )
+    if not _is_opm67_ag:
+        try:
+            _ag_dbc = (get_campaign_by_uid(st.session_state["campaign_uid"])
+                       if st.session_state.get("campaign_uid") else None)
+            if _ag_dbc and (str(_ag_dbc.get("opm_ticket", "")).upper() == "OPM-67"
+                            or str(_ag_dbc.get("campaign_id", "")) == "52136"):
+                _is_opm67_ag = True
+        except Exception:
+            pass
+    if _is_opm67_ag:
         _opm67_aud_html = _load_opm67_report("audience")
         if _opm67_aud_html:
             stub_html = _opm67_aud_html
