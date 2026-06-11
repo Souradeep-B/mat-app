@@ -122,7 +122,7 @@ This ensures OPM Ticket and WF Number are always available in `campaign_context`
 
 ### Rules
 - Nothing moves to Audience Builder until user clicks "Confirm & Proceed"
-- "Confirm & Proceed" strips internal flags (`_is_stub` etc.) before saving to `campaign_context`, sets `page_idx = 1`, `_nav_pending = True`, `_scroll_top = True`, and calls `st.rerun()`
+- "Confirm & Proceed" strips internal flags (`_is_stub` etc.) before saving to `campaign_context`, sets `page_idx = PAGES.index("2. Audience Builder")`, `_nav_pending = True`, `_scroll_top = True`, and calls `st.rerun()`
 - `_is_stub` and any `_`-prefixed keys are always stripped before saving to `campaign_context`
 - Method A: corrections must go through re-entering ticket and clicking Start Intake
 - Method B: if summary looks wrong, user re-uploads a corrected PDF
@@ -192,7 +192,7 @@ notebook_name = "_".join(_nb_parts)
 Prevents ugly `"___2026_Progress_Campaign"` names when fields are blank.
 
 ### Standalone mode
-If no `campaign_context` in session state, shows "Enter campaign details manually" expander before Section 1. Fields: Client, OPM Ticket, WF Number, Campaign Type, Channel(s), Affiliations, Geography, Suppressions. **"Use these details" requires Client + OPM Ticket before saving.** Section 1 "Edit / Re-run intake" sets `page_idx = 0`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`.
+If no `campaign_context` in session state, shows "Enter campaign details manually" expander before Section 1. Fields: Client, OPM Ticket, WF Number, Campaign Type, Channel(s), Affiliations, Geography, Suppressions. **"Use these details" requires Client + OPM Ticket before saving.** Section 1 "Edit / Re-run intake" sets `page_idx = PAGES.index("1. Jira Intake")`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`.
 
 ### Rules
 - Sections unlock one at a time — no skipping
@@ -200,7 +200,7 @@ If no `campaign_context` in session state, shows "Enter campaign details manuall
 - Activity IDs shown in human-readable format (activity name + external ID)
 - Primary capping target rule ID is displayed but never asked for confirmation
 - Output query always shows which columns are included and confirms no PII
-- "Proceed to Approval Gate" writes `audience_summary`, sets `page_idx = 2`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
+- "Proceed to Approval Gate" writes `audience_summary`, sets `page_idx = PAGES.index("3. Approval Gate")`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
 
 ---
 
@@ -222,15 +222,15 @@ Send the HTML approval report to recipients, wait for reply, and track approval 
 
 ### Send button guard
 
-Before showing "Send Approval Email", the page checks if campaign data is present:
+Before showing "Send for Approval", the page checks if campaign data is present:
 ```python
 _ag_has_data = bool(campaign.get("OPM Ticket", "").strip() or campaign.get("Client", "").strip())
 if not _ag_has_data:
-    st.warning("⚠️ No campaign data found. Please complete Jira Intake → Audience Builder first, or enter details manually above, before sending the approval email.")
-elif st.button("📨 Send Approval Email", ...):
+    st.warning("⚠️ No campaign data found. ...")
+elif st.button("📨 Send for Approval", ...):
     ...
 ```
-The button is hidden entirely (replaced by a warning) when both OPM Ticket and Client are blank.
+The button is hidden entirely (replaced by a warning) when both OPM Ticket and Client are blank. The send also requires the campaign to exist in the `campaigns` table (warns to run Jira Intake otherwise).
 
 ### Standalone mode
 If no `audience_summary` or `campaign_context` found, shows "Enter campaign details manually" expander. Fields: Client, OPM Ticket, Channel, Campaign Name, Audience Count, Affiliations. Submitting writes to `st.session_state["audience_summary"]` and reruns.
@@ -273,7 +273,7 @@ The approval report HTML is built dynamically from BRD context.
 
 ### Rules
 - Subject line: `[APPROVAL REQUIRED] {OPM Ticket} | {Client} {Campaign} — Audience Review`
-- "Proceed to Monitoring →" sets `page_idx = 3`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
+- "Proceed to Monitoring →" sets `page_idx = PAGES.index("4. Monitoring")`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
 
 ---
 
@@ -322,7 +322,7 @@ _stub_camp = {
 #### Report preview and send — same as before
 
 - Download HTML / Download PDF / Send via Gmail appear after generation
-- "Proceed to Post-Campaign ROI →" sets `page_idx = 4`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
+- "Proceed to Post-Campaign ROI →" sets `page_idx = PAGES.index("5. Post-Campaign ROI")`, `_nav_pending = True`, `_scroll_top = True`, `st.rerun()`
 
 ### Session state keys
 
@@ -425,11 +425,14 @@ st.rerun()
 ```
 
 **Navigation points that set `_nav_pending = True`:**
-1. Jira Intake — "Confirm & Proceed to Audience Builder →" (`page_idx = 1`)
-2. Audience Builder Section 1 — "Edit / Re-run intake" (`page_idx = 0`)
-3. Audience Builder Section 6 — "Proceed to Approval Gate →" (`page_idx = 2`)
-4. Approval Gate Section 5 — "Proceed to Monitoring →" (`page_idx = 3`)
-5. Monitoring — "Proceed to Post-Campaign ROI →" (`page_idx = 4`)
+> ⚠️ **Never hardcode page indices** — the Dashboard insertion shifted them all. Every nav button uses `st.session_state["page_idx"] = PAGES.index("<page label>")`. Current PAGES order: 🏠 Dashboard (0), 1. Jira Intake, 2. Audience Builder, 3. Approval Gate, 4. Monitoring, 5. Post-Campaign ROI, (⚙ Admin Panel if Admin).
+
+1. Dashboard — "➕ Start New Campaign" → `PAGES.index("1. Jira Intake")`
+2. Jira Intake — "Confirm & Proceed to Audience Builder →" → `PAGES.index("2. Audience Builder")`
+3. Audience Builder Section 1 — "Edit / Re-run intake" → `PAGES.index("1. Jira Intake")`
+4. Audience Builder Section 6 — "Proceed to Approval Gate →" → `PAGES.index("3. Approval Gate")`
+5. Approval Gate Section 4 — "Proceed to Monitoring →" → `PAGES.index("4. Monitoring")`
+6. Monitoring — "Proceed to Post-Campaign ROI →" → `PAGES.index("5. Post-Campaign ROI")`
 
 User sidebar clicks do NOT set `_nav_pending` — this is intentional. User clicks update `_nav_radio` directly through Streamlit's widget interaction, which is correct and doesn't need a pre-render hook.
 
@@ -441,7 +444,7 @@ The `show_brd_summary()` call must be OUTSIDE both method blocks. Structure:
 
 This means the summary persists when: any button is clicked, the method toggle changes, the user navigates away and comes back.
 
-"Confirm & Proceed" → strips `_`-prefixed keys, saves clean dict to `campaign_context`, pops `_brd_active_summary`, sets `page_idx = 1`, `_nav_pending = True`, `_scroll_top = True`, calls `st.rerun()`.
+"Confirm & Proceed" → strips `_`-prefixed keys, saves clean dict to `campaign_context`, pops `_brd_active_summary`, sets `page_idx = PAGES.index("2. Audience Builder")`, `_nav_pending = True`, `_scroll_top = True`, calls `st.rerun()`.
 
 ### Scroll-to-top implementation
 
@@ -593,7 +596,7 @@ Every button that processes or sends data must be guarded against no-intake scen
 | AB — Section 1 "Looks good — proceed" | Requires any campaign field non-empty | `st.error` if all blank; sets `s1_confirmed` on pass |
 | AB — Section 2 "Fetch Client Config" | Gated on `s1_confirmed` | Shows info message if not confirmed |
 | AB — Fallback SQL | Uses `<ORG_ID>` placeholder | Never hardcode a client org_id in the template |
-| AG — "Send Approval Email" | Requires OPM Ticket or Client non-empty | Warning + hidden button if both blank |
+| AG — "Send for Approval" | Requires OPM Ticket or Client non-empty | Warning + hidden button if both blank |
 | MON — "Generate Delivery Report" | Requires Campaign ID non-empty + launch not future | `disabled=(not cid or dp < 0)` |
 | MON — "Look up Campaign ID" | Stub — always warns | Orange `st.warning`: "Stub result — verify manually" |
 | ROI — "Generate ROI Report" | Requires Campaign ID non-empty + launch date selected + not future | `disabled=(not cid or no_launch or dp < 0)` |
@@ -626,29 +629,20 @@ st.sidebar.caption("Optum Engage · B2C Campaigns · ⚡ MAT")
 
 ---
 
-## App Storage — SQLite (`campaigns.db`)
+## App Storage — IMPLEMENTED (superseded design note)
 
-> **Not yet implemented.** Documents the intended design for when SQLite is wired in.
+> ✅ This section's original SQLite-design plan is now BUILT — see **Phase 2 / Database Table Tracker** below for the real implementation: `db.py` (shared engine — SQLite local / Supabase Postgres cloud via `DATABASE_URL`), `campaigns.py` + child tables, write triggers wired into the pages. Timestamps are ISO strings; upsert key priority: `opm_ticket` → `campaign_id` → `wf_number`.
 
-One row per campaign in a `campaigns` table. All columns except `id`, `client`, `campaign_name`, `created_at` are nullable — partial module usage is supported.
-
-### Write triggers
+### Current write triggers (as built)
 
 | Page | Trigger | DB action |
 |---|---|---|
-| 1 — Jira Intake | "Confirm & Proceed" | INSERT or UPDATE (upsert on `opm_ticket`) |
-| 2 — Audience Builder | Notebook created / query copied | UPDATE audience builder columns |
-| 3 — Approval Gate | "Send Approval Email" | UPDATE approval_status = "Not Yet" |
-| 3 — Approval Gate | "Mark as Approved/Rejected" | UPDATE approval_status + timestamp |
-| 4 — Monitoring | "Generate Delivery Report" | UPDATE campaign_id + launch_date |
-| 4 — Monitoring | Report sent | UPDATE t1/t2_report_sent_at |
-| 5 — ROI | ROI report generated | UPDATE roi_report_generated_at |
-
-### Rules
-- `campaigns.db` created automatically on first app run
-- Timestamps stored as ISO 8601 strings
-- Lookup key: `opm_ticket` if present; else `campaign_name + client + campaign_type`
-- Never duplicate rows — always upsert
+| 1 — Jira Intake | "Confirm & Proceed" | `upsert_campaign()` (ticket/WF/client/type/channel/intake_date/created_by) |
+| 2 — AB §2 | Sanity fetch | `upsert_client_config()` (OPM-67 sample); cache read for other clients |
+| 2 — AB §5 | "Create Notebook" | `update_campaign(notebook_link=…)` |
+| 3 — Approval Gate | "Send for Approval" | `create_approval()` + campaign snapshot (Awaiting) + notify approver |
+| 3 — AG / 0 — Dashboard | Approve / Reject | `approvals.set_status()` + snapshot + notify requester |
+| 4/5 — Mon/ROI | "Look up Campaign ID" | READ `find_campaign()` by ticket/WF/campaign_id |
 
 ---
 
