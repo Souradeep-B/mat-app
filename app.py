@@ -398,47 +398,103 @@ if (_IS_DEMO and not _logging_out and not st.session_state.get("auth_user")
 if _IS_DEMO:
     # ══ PATH B — Simulated login screen ═══════════════════════════════════════
     if not st.session_state.get("auth_user"):
-        # ── Login design system: ambient gradient canvas + elevated card ──────
-        st.markdown("""
+        _step = st.session_state.get("_demo_step", "welcome")
+
+        # ── Login design system ───────────────────────────────────────────────
+        # NOTE: Streamlit's bordered-container `data-testid` is unstable across
+        # versions, so the card is built on the STABLE `.stColumn` class via
+        # `:has()` (the middle column is the only one holding widgets). Buttons
+        # are styled through the stable `.stButton > button` selector.
+        st.markdown(f"""
         <style>
-          [data-testid="stSidebar"], [data-testid="collapsedControl"] {display:none !important;}
-          [data-testid="stHeader"] {background:transparent !important;}
-          [data-testid="stToolbar"] {display:none !important;}
+          [data-testid="stSidebar"], [data-testid="collapsedControl"] {{display:none !important;}}
+          [data-testid="stHeader"] {{background:transparent !important;}}
+          [data-testid="stToolbar"], [data-testid="stDecoration"] {{display:none !important;}}
+          #MainMenu {{display:none !important;}}
 
-          /* Deep-navy canvas with soft teal auras */
-          [data-testid="stAppViewContainer"] {
+          /* Deep-navy canvas with soft teal auras + faint grid */
+          [data-testid="stAppViewContainer"] {{
             background:
-              radial-gradient(1100px 520px at 15% -10%, rgba(0,123,143,.38), transparent 60%),
-              radial-gradient(900px 520px at 110% 115%, rgba(53,196,215,.22), transparent 55%),
-              linear-gradient(160deg, #0A2540 0%, #0B1D33 60%, #081626 100%) !important;
-          }
-          .block-container {padding-top:9vh !important; max-width: 1100px;}
+              radial-gradient(1200px 560px at 12% -12%, rgba(0,137,159,.42), transparent 58%),
+              radial-gradient(1000px 560px at 112% 118%, rgba(53,196,215,.20), transparent 55%),
+              linear-gradient(160deg, #0A2540 0%, #0B1D33 58%, #07131F 100%) !important;
+          }}
+          [data-testid="stAppViewContainer"]::before {{
+            content:""; position:fixed; inset:0; pointer-events:none; opacity:.5;
+            background-image:
+              linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+            background-size:46px 46px;
+            -webkit-mask-image:radial-gradient(900px 600px at 50% 38%, #000 0%, transparent 75%);
+                    mask-image:radial-gradient(900px 600px at 50% 38%, #000 0%, transparent 75%);
+          }}
+          .block-container {{padding-top:10vh !important; max-width:1080px;}}
 
-          /* The login card — Streamlit bordered container, re-skinned */
-          [data-testid="stVerticalBlockBorderWrapper"] {
-            background:#FFFFFF !important;
-            border:1px solid rgba(255,255,255,.10) !important;
-            border-radius:22px !important;
-            padding:2.5rem 2.4rem 2.1rem !important;
+          /* ── THE CARD — stable .stColumn class, scoped to the TOP-LEVEL
+                middle column only (`:not(.stColumn ...)` excludes the nested
+                Back/Continue columns so they don't become mini-cards). ── */
+          .stHorizontalBlock:not(.stColumn .stHorizontalBlock) > .stColumn:has(.stButton),
+          .stHorizontalBlock:not(.stColumn .stHorizontalBlock) > .stColumn:has(.stTextInput) {{
+            background:#FFFFFF;
+            border-radius:24px;
+            padding:2.6rem 2.5rem 2.2rem !important;
             box-shadow:
-              0 40px 90px rgba(2,12,27,.55),
-              0 12px 28px rgba(2,12,27,.38),
-              0 0 0 1px rgba(0,123,143,.18) !important;
-          }
-          [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {gap:0.55rem;}
+              0 48px 100px rgba(2,12,27,.60),
+              0 16px 36px rgba(2,12,27,.40),
+              inset 0 1px 0 rgba(255,255,255,.7),
+              0 0 0 1px rgba(255,255,255,.06);
+            animation:matCardIn .5s cubic-bezier(.16,1,.3,1);
+          }}
+          @keyframes matCardIn {{
+            from {{opacity:0; transform:translateY(14px) scale(.985);}}
+            to   {{opacity:1; transform:translateY(0) scale(1);}}
+          }}
+          /* Nested button row sits flush — no card chrome */
+          .stColumn .stHorizontalBlock .stColumn {{padding:0 !important;}}
 
-          /* Email input — large, soft, focused ring */
-          [data-baseweb="input"] {
+          /* ── Email input — large, soft, animated focus ring ── */
+          [data-baseweb="input"] {{
             border-radius:12px !important;
             border:1.5px solid #E3E8EF !important;
             background:#F8FAFC !important;
-          }
-          [data-baseweb="input"] input {height:46px !important; font-size:15px !important;}
-          [data-baseweb="input"]:focus-within {
-            border-color:#007B8F !important;
-            background:#FFFFFF !important;
-            box-shadow:0 0 0 4px rgba(0,123,143,.14) !important;
-          }
+            transition:border-color .18s ease, box-shadow .18s ease, background .18s ease;
+          }}
+          [data-baseweb="input"] input {{height:48px !important; font-size:15px !important; color:#0F172A !important;}}
+          [data-baseweb="input"]:focus-within {{
+            border-color:#007B8F !important; background:#FFFFFF !important;
+            box-shadow:0 0 0 4px rgba(0,123,143,.15) !important;
+          }}
+
+          /* ── Buttons — stable .stButton selector ── */
+          .stButton > button {{
+            height:50px !important; min-height:50px !important;
+            border-radius:13px !important;
+            font-size:15px !important; font-weight:600 !important;
+            transition:all .18s cubic-bezier(.16,1,.3,1) !important;
+          }}
+          /* Primary (welcome = white Google btn; email step = teal CTA) */
+          .stButton > button[kind="primary"] {{
+            {"background:#FFFFFF !important; border:1.5px solid #DADCE0 !important; box-shadow:0 1px 3px rgba(16,24,40,.10) !important;" if _step == "welcome" else "background:linear-gradient(135deg,#00A0BA,#00768A) !important; border:none !important; box-shadow:0 10px 24px rgba(0,123,143,.36) !important;"}
+            display:flex !important; align-items:center !important; justify-content:center !important;
+          }}
+          .stButton > button[kind="primary"] p {{
+            {"color:#1F2937 !important;" if _step == "welcome" else "color:#FFFFFF !important;"}
+            font-size:15px !important; font-weight:600 !important;
+          }}
+          .stButton > button[kind="primary"]:hover {{
+            transform:translateY(-1px) !important;
+            {"border-color:#007B8F !important; background:#F8FEFF !important; box-shadow:0 8px 22px rgba(0,123,143,.20) !important;" if _step == "welcome" else "box-shadow:0 14px 30px rgba(0,123,143,.46) !important;"}
+          }}
+          {".stButton > button[kind='primary']::before {content:''; display:inline-block; width:21px; height:21px; margin-right:11px; flex:0 0 auto; background:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/><path fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/><path fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/><path fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/></svg>\") no-repeat center / contain;}" if _step == "welcome" else ""}
+          /* Secondary (ghost back button) */
+          .stButton > button[kind="secondary"] {{
+            background:transparent !important; border:1.5px solid #E3E8EF !important;
+            box-shadow:none !important;
+          }}
+          .stButton > button[kind="secondary"] p {{color:#475569 !important; font-weight:600 !important;}}
+          .stButton > button[kind="secondary"]:hover {{
+            border-color:#94A3B8 !important; background:#F8FAFC !important;
+          }}
         </style>
         """, unsafe_allow_html=True)
 
@@ -450,146 +506,78 @@ if _IS_DEMO:
                 height=0,
             )
 
-        _step = st.session_state.get("_demo_step", "welcome")
-        _, _mid, _ = st.columns([1, 1.08, 1])
+        _, _mid, _ = st.columns([1, 1.05, 1])
         with _mid:
-            with st.container(border=True):
-                # ── Brand mark + heading ─────────────────────────────────────
-                st.markdown("""
-                <div style="text-align:center;">
-                  <div style="display:inline-flex;align-items:center;justify-content:center;
-                              width:64px;height:64px;border-radius:18px;
-                              background:linear-gradient(145deg,#00899F,#006B7D);
-                              box-shadow:0 10px 26px rgba(0,123,143,.45),
-                                         inset 0 1px 0 rgba(255,255,255,.25);
-                              font-size:30px;font-weight:800;color:#fff;
-                              margin-bottom:18px;">M</div>
-                  <div style="font-size:23px;font-weight:800;color:#0F172A;
-                              letter-spacing:-0.3px;">Welcome to MAT</div>
-                  <div style="font-size:13px;color:#64748B;margin-top:5px;">
-                    Marketing Automation Tool · Optum Engage
-                  </div>
-                  <div style="height:1px;background:linear-gradient(90deg,transparent,#E2E8F0,transparent);
-                              margin:22px 0 20px;"></div>
-                </div>
-                """, unsafe_allow_html=True)
+            # ── Brand mark + heading ─────────────────────────────────────────
+            _heading = "Welcome to MAT" if _step == "welcome" else "Choose your account"
+            _subheading = ("Marketing Automation Tool · Optum Engage"
+                           if _step == "welcome" else "to continue to MAT")
+            st.markdown(f"""
+            <div style="text-align:center;">
+              <div style="display:inline-flex;align-items:center;justify-content:center;
+                          width:66px;height:66px;border-radius:19px;
+                          background:linear-gradient(145deg,#00A0BA,#006375);
+                          box-shadow:0 12px 30px rgba(0,123,143,.50),
+                                     inset 0 1px 0 rgba(255,255,255,.30);
+                          font-size:31px;font-weight:800;color:#fff;
+                          margin-bottom:18px;letter-spacing:-1px;">M</div>
+              <div style="font-size:24px;font-weight:800;color:#0F172A;
+                          letter-spacing:-0.4px;">{_heading}</div>
+              <div style="font-size:13px;color:#64748B;margin-top:6px;">{_subheading}</div>
+              <div style="height:1px;background:linear-gradient(90deg,transparent,#E2E8F0,transparent);
+                          margin:22px 0 20px;"></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-                if _step == "welcome":
-                    # Google-style "Sign in" button (white, bordered, G logo)
-                    st.markdown("""
-                    <style>
-                      [data-testid="stBaseButton-primary"] {
-                        background:#FFFFFF !important;
-                        border:1.5px solid #DADCE0 !important;
-                        color:#1F2937 !important;
-                        height:50px !important; min-height:50px !important;
-                        border-radius:13px !important;
-                        font-size:15px !important; font-weight:600 !important;
-                        box-shadow:0 1px 3px rgba(16,24,40,.08) !important;
-                        display:flex; align-items:center; justify-content:center;
-                        transition:all .18s ease;
-                      }
-                      [data-testid="stBaseButton-primary"] p {color:#1F2937 !important; font-size:15px !important;}
-                      [data-testid="stBaseButton-primary"]:hover {
-                        border-color:#007B8F !important;
-                        background:#F8FEFF !important;
-                        box-shadow:0 6px 18px rgba(0,123,143,.18) !important;
-                        transform:translateY(-1px);
-                      }
-                      [data-testid="stBaseButton-primary"]::before {
-                        content:""; display:inline-block; width:21px; height:21px;
-                        margin-right:11px; flex:0 0 auto;
-                        background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/><path fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/><path fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/><path fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/></svg>") no-repeat center / contain;
-                      }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    if st.button("Sign in", use_container_width=True,
-                                 type="primary", key="demo_google_btn"):
-                        st.session_state["_demo_step"] = "email"
-                        st.rerun()
-                    st.markdown(
-                        "<div style='text-align:center;font-size:12px;color:#94A3B8;"
-                        "margin-top:14px;'>Use your Capillary Google account to continue</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                else:  # _step == "email"
-                    # Teal CTA + ghost back button
-                    st.markdown("""
-                    <style>
-                      [data-testid="stBaseButton-primary"] {
-                        background:linear-gradient(135deg,#00899F,#006B7D) !important;
-                        border:none !important; color:#FFFFFF !important;
-                        height:46px !important; min-height:46px !important;
-                        border-radius:12px !important;
-                        font-size:14.5px !important; font-weight:700 !important;
-                        box-shadow:0 8px 20px rgba(0,123,143,.32) !important;
-                        transition:all .18s ease;
-                      }
-                      [data-testid="stBaseButton-primary"] p {color:#FFFFFF !important;}
-                      [data-testid="stBaseButton-primary"]:hover {
-                        box-shadow:0 12px 26px rgba(0,123,143,.42) !important;
-                        transform:translateY(-1px);
-                      }
-                      [data-testid="stBaseButton-secondary"] {
-                        background:transparent !important;
-                        border:1.5px solid #E3E8EF !important; color:#475569 !important;
-                        height:46px !important; min-height:46px !important;
-                        border-radius:12px !important;
-                        font-size:14.5px !important; font-weight:600 !important;
-                        box-shadow:none !important;
-                      }
-                      [data-testid="stBaseButton-secondary"]:hover {
-                        border-color:#94A3B8 !important; color:#0F172A !important;
-                        background:#F8FAFC !important;
-                      }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    st.markdown(
-                        "<div style='text-align:center;font-size:16px;font-weight:700;"
-                        "color:#0F172A;margin-bottom:2px;'>Choose your account</div>"
-                        "<div style='text-align:center;font-size:12.5px;color:#64748B;"
-                        "margin-bottom:16px;'>to continue to MAT</div>",
-                        unsafe_allow_html=True,
-                    )
-                    _em = st.text_input(
-                        "Email", placeholder=f"you@{ALLOWED_DOMAIN}",
-                        key="demo_email_in", label_visibility="collapsed"
-                    )
-                    _b1, _b2 = st.columns([1, 1.4])
-                    with _b1:
-                        if st.button("← Back", use_container_width=True, key="demo_back"):
-                            st.session_state["_demo_step"] = "welcome"
-                            st.rerun()
-                    with _b2:
-                        if st.button("Continue →", use_container_width=True,
-                                     type="primary", key="demo_continue"):
-                            _em = (_em or "").strip().lower()
-                            if not is_allowed_domain(_em):
-                                st.error(f"Please use a @{ALLOWED_DOMAIN} account.")
-                            else:
-                                _nm = _em.split("@")[0].replace(".", " ").title()
-                                upsert_user(_em, _nm, "")
-                                st.session_state["auth_user"] = get_user(_em)
-                                st.session_state.pop("_demo_step", None)
-                                st.rerun()
-
-                # ── In-card footer ───────────────────────────────────────────
+            if _step == "welcome":
+                if st.button("Sign in with Google", use_container_width=True,
+                             type="primary", key="demo_google_btn"):
+                    st.session_state["_demo_step"] = "email"
+                    st.rerun()
                 st.markdown(
-                    f"<div style='text-align:center;margin-top:20px;padding-top:16px;"
-                    f"border-top:1px solid #F1F5F9;font-size:11.5px;color:#94A3B8;'>"
-                    f"🔒 Access restricted to <b style='color:#64748B;'>@{ALLOWED_DOMAIN}</b> accounts"
-                    f"</div>",
+                    "<div style='text-align:center;font-size:12px;color:#94A3B8;"
+                    "margin-top:14px;'>Use your Capillary Google account to continue</div>",
                     unsafe_allow_html=True,
                 )
+            else:  # _step == "email"
+                _em = st.text_input(
+                    "Email", placeholder=f"you@{ALLOWED_DOMAIN}",
+                    key="demo_email_in", label_visibility="collapsed"
+                )
+                _b1, _b2 = st.columns([1, 1.5])
+                with _b1:
+                    if st.button("← Back", use_container_width=True, key="demo_back"):
+                        st.session_state["_demo_step"] = "welcome"
+                        st.rerun()
+                with _b2:
+                    if st.button("Continue", use_container_width=True,
+                                 type="primary", key="demo_continue"):
+                        _em = (_em or "").strip().lower()
+                        if not is_allowed_domain(_em):
+                            st.error(f"Please use a @{ALLOWED_DOMAIN} account.")
+                        else:
+                            _nm = _em.split("@")[0].replace(".", " ").title()
+                            upsert_user(_em, _nm, "")
+                            st.session_state["auth_user"] = get_user(_em)
+                            st.session_state.pop("_demo_step", None)
+                            st.rerun()
 
-            # Below-card copyright on the gradient
+            # ── In-card footer ───────────────────────────────────────────────
             st.markdown(
-                "<div style='text-align:center;margin-top:26px;font-size:11.5px;"
-                "color:rgba(201,216,232,.55);letter-spacing:.4px;'>"
-                "© 2026 Capillary Technologies · MAT</div>",
+                f"<div style='text-align:center;margin-top:22px;padding-top:16px;"
+                f"border-top:1px solid #F1F5F9;font-size:11.5px;color:#94A3B8;'>"
+                f"🔒 Access restricted to <b style='color:#64748B;'>@{ALLOWED_DOMAIN}</b> accounts"
+                f"</div>",
                 unsafe_allow_html=True,
             )
+
+        # Below-card copyright on the gradient (outside the card column)
+        st.markdown(
+            "<div style='text-align:center;margin-top:30px;font-size:11.5px;"
+            "color:rgba(201,216,232,.55);letter-spacing:.4px;'>"
+            "© 2026 Capillary Technologies · MAT</div>",
+            unsafe_allow_html=True,
+        )
         st.stop()
 
 else:
