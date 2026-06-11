@@ -853,6 +853,11 @@ Both the Jira MCP and Drive MCP are already available in this Claude session —
 - `ADMIN_EMAIL` in `.env` is seeded as Admin on startup so there is always an admin (bootstrap).
 - Profile dropdown shows a **DEMO MODE** badge.
 
+**Login visual design (redesigned 2026-06-12):** elevated white card on a deep-navy gradient canvas with a faint masked grid texture, gradient brand-tile logo with glow, card entrance animation, and layered shadows — looks like a real product login, not a demo stub.
+- ⚠️ **Styling must NOT use `data-testid="stVerticalBlockBorderWrapper"`** — Streamlit 1.58 no longer emits it, so the card silently vanished (dark text on dark bg). The card is built on the **stable `.stColumn` class** via `:has(.stButton)/:has(.stTextInput)`, scoped with `.stHorizontalBlock:not(.stColumn .stHorizontalBlock) > .stColumn` so the nested Back/Continue columns don't become mini-cards.
+- Buttons styled through the stable `.stButton > button[kind="primary"|"secondary"]` selectors (not `stBaseButton-*`). Welcome step = white "Sign in with Google" button (real G-logo `::before`); email step = teal gradient Continue + ghost Back. Per-step CSS is switched by interpolating `_step` into the `<style>` block.
+- Copyright line is rendered **outside** the card column (light text needs the gradient, not the white card).
+
 **Path A — Real Google OAuth (AUTH_MODE=google), when ready for production:**
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create project.
 2. Configure OAuth consent screen (Internal = capillarytech.com only, or External + test users).
