@@ -931,6 +931,10 @@ Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flex
 - **⚠️ Keyed text_input gotcha:** `value=` is IGNORED after first render. To programmatically fill `mon_cid_input`/`roi_cid_input`, stage via `_mon_cid_pending`/`_roi_cid_pending` and write to the widget key BEFORE instantiation (pre-render hook, same pattern as `_nav_pending`).
 - `audience_files` writes NOT yet wired — no real Drive upload exists in the app yet; wire it the moment Drive upload lands.
 
+**⚠️ Widget-state persistence across page switches (2026-06-11):** Streamlit garbage-collects the state of any keyed widget NOT rendered in the current run — switching pages wiped every input of the page you left. Fixed with a **pinning loop** at the top of app.py: re-assigns every non-bool session key to itself each run (`st.session_state[k] = st.session_state[k]`), converting widget state into durable session data. **Bools MUST be skipped**: button keys accept the assignment silently but crash later at button instantiation (`StreamlitValueAssignmentNotAllowedError`); bool session flags don't need pinning (plain keys are never GC'd). All inputs now survive page switches until browser refresh.
+
+**Approver dropdown rule (2026-06-11):** AG "Send for Approval" lists ONLY users whose role == `Approver` (Admins excluded). Roles are single-valued — a user is Admin OR Approver, never both. Self-approval works mechanically (assign yourself → the request lands in your own dashboard inbox), but the dropdown only offers Approver-role users.
+
 ## 📊 DATABASE TABLE TRACKER (single source of truth — keep updated)
 
 | Table | Tier | Status | Module | Wired into UI |
