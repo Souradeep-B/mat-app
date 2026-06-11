@@ -39,6 +39,9 @@ def now_iso() -> str:
 def init_db():
     """Create all tables that don't exist yet.
     Imports the table-defining modules so their Tables register on `metadata`."""
-    import auth        # noqa: F401  registers the `users` table
-    import campaigns   # noqa: F401  registers the `campaigns` table
+    import auth            # noqa: F401  users
+    import campaigns       # noqa: F401  campaigns (hub — campaign_uid join key)
+    import client_config   # noqa: F401  per-client Sanity config cache
+    import approvals       # noqa: F401  approval workflow history
+    import audience_files  # noqa: F401  audience file refs (Drive links + counts, no PII)
     metadata.create_all(engine)
