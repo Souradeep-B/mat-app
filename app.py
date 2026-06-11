@@ -310,6 +310,33 @@ else:
     # Local: http://localhost:8501 · Cloud: set OAUTH_REDIRECT_URI to the app URL.
     _redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:8501")
 
+    # ── Disable PKCE at the Flow CLASS level ──────────────────────────────────
+    # streamlit-google-auth creates a brand-new local Flow inside each method
+    # (login / check_authentification) — there is no persistent flow object to
+    # patch. The redirect back from Google lands in a fresh Streamlit session,
+    # so a PKCE code_verifier generated before the redirect is lost and the
+    # token exchange fails with "(invalid_grant) Missing code verifier"
+    # (google-auth-oauthlib >= 1.4 auto-generates a verifier by default).
+    # Patching the class methods strips PKCE from BOTH the auth URL and the
+    # token exchange. Web-app clients authenticate with client_secret, so PKCE
+    # is safely optional.
+    import google_auth_oauthlib.flow as _gaof
+    if not getattr(_gaof.Flow, "_mat_no_pkce", False):
+        _orig_auth_url = _gaof.Flow.authorization_url
+        def _auth_url_no_pkce(self, **kwargs):
+            self.autogenerate_code_verifier = False
+            self.code_verifier = None
+            return _orig_auth_url(self, **kwargs)
+        _gaof.Flow.authorization_url = _auth_url_no_pkce
+
+        _orig_fetch_token = _gaof.Flow.fetch_token
+        def _fetch_token_no_pkce(self, **kwargs):
+            self.code_verifier = None
+            kwargs.pop("code_verifier", None)
+            return _orig_fetch_token(self, **kwargs)
+        _gaof.Flow.fetch_token = _fetch_token_no_pkce
+        _gaof.Flow._mat_no_pkce = True
+
     try:
         from streamlit_google_auth import Authenticate as _GoogleAuth
         _authenticator = _GoogleAuth(
@@ -319,17 +346,6 @@ else:
             cookie_key=os.environ.get("COOKIE_SECRET", "mat_cookie_secret"),
             cookie_expiry_days=1,
         )
-        # Disable PKCE on the underlying OAuth flow. The redirect back from
-        # Google lands in a FRESH Streamlit session, so the code_verifier
-        # generated before the redirect is lost → token exchange fails with
-        # "(invalid_grant) Missing code verifier" (newer google-auth-oauthlib
-        # enables PKCE by default). Web-app clients authenticate with the
-        # client_secret, so PKCE is safely optional here.
-        try:
-            _authenticator.flow.autogenerate_code_verifier = False
-            _authenticator.flow.code_verifier = None
-        except Exception:
-            pass
         _authenticator.check_authentification()
     except Exception as _auth_err:
         st.error(f"⚠️ Auth initialisation error: {_auth_err}")
