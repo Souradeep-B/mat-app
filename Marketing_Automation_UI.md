@@ -927,11 +927,19 @@ Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flex
 - `approvals`: PK `approval_uid`, FK `campaign_uid` · create_approval / set_status / get_pending_for(approver) / get_by_campaign · full history (campaigns.approval_status stays the snapshot)
 - `audience_files`: PK `file_uid`, FK `campaign_uid` · add_audience_file / get_files_for_campaign · Drive link + row_count ONLY (PII rule)
 
+**Tier 1 page wiring — DONE ✅ (2026-06-11), verified in browser:**
+- Jira Intake confirm → `upsert_campaign()` (only when ticket or WF present — prevents blank rows); `campaign_uid` stored in session.
+- AB §2 fetch → OPM-67 sample also writes `client_config` cache; other clients try `get_client_config()` first (source tracked in `s2_source`: sample/cache/stub with distinct messaging), stub placeholders only as last resort.
+- AB §5 "Create Notebook" → `update_campaign(notebook_link=…)`.
+- Approval Gate send → `approvals.create_approval()` + campaign snapshot (status=Awaiting, sent_at, subject, recipients); Approve/Reject buttons → `set_status()` + snapshot. `ag_approval_uid` kept in session.
+- Monitoring/ROI "Look up Campaign ID" → real `find_campaign()` (ticket → WF → campaign_id). Three outcomes: found+has campaign_id → autofill; found without → warning to enter manually; not found → error suggesting intake.
+- **⚠️ Keyed text_input gotcha:** `value=` is IGNORED after first render. To programmatically fill `mon_cid_input`/`roi_cid_input`, stage via `_mon_cid_pending`/`_roi_cid_pending` and write to the widget key BEFORE instantiation (pre-render hook, same pattern as `_nav_pending`).
+- `audience_files` writes NOT yet wired — no real Drive upload exists in the app yet; wire it the moment Drive upload lands.
+
 **Remaining Phase 2:**
-- [ ] Wire Jira Intake → `upsert_campaign()` on confirm
-- [ ] Wire Monitoring/ROI → `find_campaign()` lookup by ticket/WF/campaign_id
-- [ ] Wire Approval Gate → approvals table; AB §2 → client_config; AB §5 → audience_files
-- [ ] Then Tier 2 (delivery_metrics, roi_metrics), Tier 3 (audit_log, notifications, email_log, knowledge_entries), Tier 4 (scheduled_jobs)
+- [ ] Tier 2: delivery_metrics + roi_metrics (save report snapshots on generate)
+- [ ] Tier 3: audit_log, notifications, email_log, knowledge_entries
+- [ ] Tier 4: scheduled_jobs
 
 #### Phase 3 — Dashboards (~2 days)
 - [ ] Add Page 0 — Dashboard (role-aware landing page)
