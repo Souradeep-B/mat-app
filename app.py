@@ -311,6 +311,27 @@ pre { border: 1px solid #E8ECF1 !important; }
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
+# WIDGET-STATE PINNING — keep every input's value across page switches.
+# Streamlit garbage-collects the state of any keyed widget that is NOT rendered
+# in the current run, so switching pages wipes the inputs of the page you left.
+# Re-assigning each key to itself converts widget state into durable session
+# data (the standard Streamlit idiom). Button-like widgets reject programmatic
+# assignment — the try/except skips them. Data survives until browser refresh.
+# ══════════════════════════════════════════════════════════════════════════════
+for _pin_key in list(st.session_state.keys()):
+    _pin_val = st.session_state[_pin_key]
+    # Skip bools: button/checkbox-style widget keys are bool-valued, and
+    # buttons crash at instantiation if their state was assigned. Plain bool
+    # session flags (s1_confirmed, …) don't need pinning — non-widget keys
+    # are never garbage-collected.
+    if isinstance(_pin_val, bool):
+        continue
+    try:
+        st.session_state[_pin_key] = _pin_val
+    except Exception:
+        pass
+
+# ══════════════════════════════════════════════════════════════════════════════
 # AUTH GATE — runs before any page rendering
 # AUTH_MODE=demo    → simulated login screen (Path B — hackathon demo, no Google)
 # AUTH_MODE=google  → real Google OAuth via google_credentials.json (Path A)
@@ -2152,7 +2173,7 @@ elif selected == "3. Approval Gate":
     # no email involved.
     try:
         _ag_approver_opts = [u["email"] for u in get_all_users()
-                             if u.get("role") in ("Approver", "Admin")]
+                             if u.get("role") == "Approver"]
     except Exception:
         _ag_approver_opts = []
     if _ag_approver_opts:
