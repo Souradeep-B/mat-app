@@ -876,6 +876,26 @@ Both the Jira MCP and Drive MCP are already available in this Claude session —
 
 **Sidebar spacing:** Tightened so all 6 nav items (5 pages + Admin Panel) + footer fit without scrolling on a standard window. Removed a duplicate `---` divider (the profile-bubble component renders in the main area, leaving two sidebar dividers adjacent). CSS injected at top of sidebar: `stVerticalBlock gap: 0.45rem`, `hr margin: 0.35rem 0`, sidebar `padding-top: 1rem`. Do NOT re-add a second divider between the MAT logo and the API status block.
 
+## Design System (global, 2026-06-11)
+
+All visual styling lives in TWO places — change these, not per-page markup:
+1. `.streamlit/config.toml` `[theme]` — base palette: primary `#007B8F` (teal), background `#FFFFFF`, secondary `#F6F8FA`, text `#1A202C`.
+2. **Global CSS block in app.py** (right after `st.set_page_config`) — the design system:
+   - **Typeface:** Inter (Google Fonts import), all elements.
+   - **Buttons:** ONE size everywhere — 38px height, 8px radius, 0.875rem/600, `white-space: nowrap` + `min-width: max-content` (never wraps to two lines). Primary = solid `#007B8F` w/ white text (selector prefix `[data-testid^="stBaseButton-primary"]` — the `^=` matters: it also catches `primaryFormSubmit`). Secondary = white w/ `#D7DEE6` border, teal hover.
+   - **Cards:** expanders, forms, metrics = white bg, `#E8ECF1` 1px border, 12px radius, faint shadow.
+   - **Headings:** h1 1.55rem/800, h2 1.15rem/700, h3 0.98rem/700 — uniform across pages.
+   - **Spacing:** `.block-container` padding-top 2.2rem, max-width 1180px; main `stVerticalBlock` gap 0.65rem; `hr` margin 0.9rem.
+   - **Sidebar:** white bg, right border, nav radio items = 8px-radius hover pills.
+   - **Inputs:** 8px radius, teal focus ring `rgba(0,123,143,0.12)`.
+   - Canvas: `#FAFBFC` app background.
+
+**Button-column rule:** paired buttons need column ratios wide enough for one-line text — use e.g. `[1.6, 1.6, 2.8]` (two buttons) or `[1.4, 1.4, 1.4, 1.8]` (three), NOT `[1, 1, 4]` (overlaps, since buttons no longer wrap).
+
+**⚠️ Local dev note:** `fileWatcherType = "none"` means the server does NOT pick up app.py edits on browser refresh — restart `streamlit run app.py` after every code change.
+
+**Common pitfall:** global `p { color: ... }` rules override button label color — the design system explicitly re-whitens `button p` for primary buttons. Keep that rule if editing.
+
 **Verified in browser (2026-06-11):** login screen → Google button → email entry → logged in as Admin → Sign out → returns to login screen and stays (no bounce). ✅
 
 **Session persistence across browser refresh (cookie-based):**
