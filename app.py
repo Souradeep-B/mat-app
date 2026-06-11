@@ -22,9 +22,10 @@ try:
 except Exception:
     pass  # no secrets.toml present (normal when running locally)
 
-# ── Auth DB init (must run before any rendering) ──────────────────────────────
+# ── DB init (must run before any rendering) ───────────────────────────────────
+from db import init_db
 from auth import (
-    init_db, upsert_user, get_user, get_all_users, set_role, delete_user,
+    upsert_user, get_user, get_all_users, set_role, delete_user,
     ROLES, ALLOWED_DOMAIN, is_allowed_domain, role_badge_html,
     sign_token, verify_token, COOKIE_NAME
 )

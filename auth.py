@@ -17,12 +17,9 @@ Roles (most → least permission):
 import os
 import hmac
 import hashlib
-import datetime
 
-from sqlalchemy import (
-    create_engine, MetaData, Table, Column, String,
-    select, insert, update, delete,
-)
+from sqlalchemy import Table, Column, String, select, insert, update, delete
+from db import engine, metadata, now_iso as _now_iso
 
 # ── Config ────────────────────────────────────────────────────────────────────
 ALLOWED_DOMAIN = "capillarytech.com"
@@ -32,25 +29,11 @@ COOKIE_NAME    = "mat_auth"
 # Role hierarchy — higher index = fewer permissions
 _ROLE_LEVEL = {r: i for i, r in enumerate(ROLES)}
 
-
-# ── Engine (Postgres on cloud, SQLite locally) ────────────────────────────────
-def _make_engine():
-    url = os.environ.get("DATABASE_URL", "").strip()
-    if url:
-        # SQLAlchemy needs the 'postgresql://' scheme (Supabase sometimes gives 'postgres://')
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        return create_engine(url, pool_pre_ping=True)
-    # Local fallback — SQLite file next to this module
-    db_path = os.path.join(os.path.dirname(__file__), "marketing_automation.db")
-    return create_engine(f"sqlite:///{db_path}")
-
-
-_engine   = _make_engine()
-_metadata = MetaData()
+# Shared engine; table registered on the shared metadata (see db.py)
+_engine = engine
 
 users = Table(
-    "users", _metadata,
+    "users", metadata,
     Column("email",       String, primary_key=True),
     Column("name",        String, nullable=False, default=""),
     Column("picture_url", String, nullable=False, default=""),
@@ -58,16 +41,6 @@ users = Table(
     # Stored as ISO string → portable across SQLite and Postgres, no dialect quirks
     Column("created_at",  String, nullable=False, default=""),
 )
-
-
-def _now_iso() -> str:
-    return datetime.datetime.utcnow().isoformat(timespec="seconds")
-
-
-# ── DB Init ───────────────────────────────────────────────────────────────────
-def init_db():
-    """Create tables if they don't exist. Safe to call on every app start."""
-    _metadata.create_all(_engine)
 
 
 # ── User CRUD ─────────────────────────────────────────────────────────────────
