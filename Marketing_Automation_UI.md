@@ -922,11 +922,16 @@ Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flex
 
 **Full table catalog (tiered):** Tier1 = users✅, campaigns✅, client_config, approvals, audience_files · Tier2 = delivery_metrics, roi_metrics · Tier3 = audit_log, notifications, email_log, knowledge_entries · Tier4 = scheduled_jobs. PII RULE: member/audience data NEVER stored — only counts + Drive links (audience_files).
 
+**Tier 1 child tables — BUILT ✅ (2026-06-11):** `client_config.py`, `approvals.py`, `audience_files.py` — registered in `db.init_db()`, verified on Supabase + SQLite with a full relational round-trip (campaign → approval → file → config, joined by `campaign_uid`).
+- `client_config`: PK `client` · upsert_client_config / get_client_config · caches Sanity config
+- `approvals`: PK `approval_uid`, FK `campaign_uid` · create_approval / set_status / get_pending_for(approver) / get_by_campaign · full history (campaigns.approval_status stays the snapshot)
+- `audience_files`: PK `file_uid`, FK `campaign_uid` · add_audience_file / get_files_for_campaign · Drive link + row_count ONLY (PII rule)
+
 **Remaining Phase 2:**
 - [ ] Wire Jira Intake → `upsert_campaign()` on confirm
 - [ ] Wire Monitoring/ROI → `find_campaign()` lookup by ticket/WF/campaign_id
-- [ ] Build Tier 1 child tables: `client_config`, `approvals`, `audience_files`
-- [ ] Then Tier 2 (delivery_metrics, roi_metrics), Tier 3, Tier 4
+- [ ] Wire Approval Gate → approvals table; AB §2 → client_config; AB §5 → audience_files
+- [ ] Then Tier 2 (delivery_metrics, roi_metrics), Tier 3 (audit_log, notifications, email_log, knowledge_entries), Tier 4 (scheduled_jobs)
 
 #### Phase 3 — Dashboards (~2 days)
 - [ ] Add Page 0 — Dashboard (role-aware landing page)
