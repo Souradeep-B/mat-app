@@ -2142,26 +2142,14 @@ elif selected == "3. Approval Gate":
                       help="PDF export unavailable. Run: pip install xhtml2pdf",
                       key="ag_pdf_disabled_btn")
 
-    # ══ SECTION 2 — Recipients ════════════════════════════════════════════════
+    # ══ SECTION 2 — Send for Approval ════════════════════════════════════════
     st.markdown("---")
-    st.markdown("### Section 2 — Recipients")
-    recipients_input = st.text_area(
-        "Recipients (comma-separated)",
-        value="stacy.swicegood@optum.com",
-        height=80,
-        help="Default: Stacy Swicegood. Add more recipients separated by commas."
-    )
-    recipients = [r.strip() for r in recipients_input.split(",") if r.strip()]
-    st.caption(f"📧 Will send to: {', '.join(recipients)}")
-
-    # ══ SECTION 3 — Send for Approval ════════════════════════════════════════
-    st.markdown("---")
-    st.markdown("### Section 3 — Send for Approval")
+    st.markdown("### Section 2 — Send for Approval")
     st.code(subject_line, language=None)
 
     # In-app approver: the request appears on this person's MAT dashboard with
-    # Approve/Reject buttons. Email recipients above are the FYI channel; the
-    # in-app decision is the system of record.
+    # Approve/Reject buttons. The in-app decision is the system of record —
+    # no email involved.
     try:
         _ag_approver_opts = [u["email"] for u in get_all_users()
                              if u.get("role") in ("Approver", "Admin")]
@@ -2169,7 +2157,7 @@ elif selected == "3. Approval Gate":
         _ag_approver_opts = []
     if _ag_approver_opts:
         _ag_inapp_approver = st.selectbox(
-            "In-app approver (sees this request on their MAT dashboard)",
+            "Approver (sees this request on their MAT dashboard)",
             _ag_approver_opts, key="ag_inapp_approver",
         )
     else:
@@ -2179,27 +2167,8 @@ elif selected == "3. Approval Gate":
 
     _ag_has_data = bool(campaign.get("OPM Ticket", "").strip() or campaign.get("Client", "").strip())
     if not _ag_has_data:
-        st.warning("⚠️ No campaign data found. Please complete Jira Intake → Audience Builder first, or enter details manually above, before sending the approval email.")
+        st.warning("⚠️ No campaign data found. Please complete Jira Intake → Audience Builder first, or enter details manually above, before sending for approval.")
     elif st.button("📨 Send for Approval", type="primary", key="ag_send"):
-        # 1) Email is the notification channel — failure must NOT block the
-        #    in-app approval record.
-        _ag_email_ok = False
-        with st.spinner("Sending via Gmail..."):
-            try:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = subject_line
-                msg["From"]    = GMAIL_SENDER
-                msg["To"]      = ", ".join(recipients)
-                msg.attach(MIMEText(stub_html, "html"))
-
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                    server.login(GMAIL_SENDER, GMAIL_PASSWORD)
-                    server.sendmail(GMAIL_SENDER, recipients, msg.as_string())
-                _ag_email_ok = True
-            except Exception as e:
-                st.error(f"Email failed (approval still recorded in-app): {e}")
-
-        # 2) The in-app approval — system of record.
         st.session_state["ag_sent"]    = True
         st.session_state["ag_sent_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state["ag_status"]  = "Awaiting"
@@ -2216,7 +2185,7 @@ elif selected == "3. Approval Gate":
                     _ag_cuid,
                     campaign.get("OPM Ticket", ""),
                     _current_user.get("email", ""),
-                    _ag_inapp_approver or (recipients[0] if recipients else ""),
+                    _ag_inapp_approver,
                     subject_line,
                 )
                 st.session_state["ag_approval_uid"] = _ap_uid
@@ -2226,7 +2195,7 @@ elif selected == "3. Approval Gate":
                     approval_sent_at=now_iso(),
                     approval_updated_at=now_iso(),
                     approval_subject_line=subject_line,
-                    approval_recipients=", ".join(recipients),
+                    approval_recipients=_ag_inapp_approver,
                 )
                 if _ag_inapp_approver:
                     notifications_db.notify(
@@ -2236,8 +2205,8 @@ elif selected == "3. Approval Gate":
                         f"({campaign.get('Client', '—')}) by {_current_user.get('email', '')}",
                     )
                 st.success(
-                    ("✅ Email sent and approval" if _ag_email_ok else "✅ Approval")
-                    + f" assigned to **{_ag_inapp_approver or '—'}** — it is now in their dashboard inbox."
+                    f"✅ Approval assigned to **{_ag_inapp_approver or '—'}** — "
+                    "it is now in their dashboard inbox."
                 )
             else:
                 st.warning("Campaign not found in the MAT database — run Jira Intake for this "
@@ -2245,10 +2214,10 @@ elif selected == "3. Approval Gate":
         except Exception as _ag_db_err:
             st.error(f"In-app approval could not be recorded: {_ag_db_err}")
 
-    # ══ SECTION 4 — Approval Status ══════════════════════════════════════════
+    # ══ SECTION 3 — Approval Status ══════════════════════════════════════════
     if st.session_state["ag_sent"]:
         st.markdown("---")
-        st.markdown("### Section 4 — Approval Status")
+        st.markdown("### Section 3 — Approval Status")
 
         status = st.session_state["ag_status"]
         if status == "Awaiting":
@@ -2292,7 +2261,7 @@ elif selected == "3. Approval Gate":
                 _ag_record_decision("Rejected")
                 st.rerun()
 
-    # ══ SECTION 5 — Next Step ════════════════════════════════════════════════
+    # ══ SECTION 4 — Next Step ════════════════════════════════════════════════
     if st.session_state.get("ag_status") == "Approved":
         st.markdown("---")
         st.success("✅ Approval Gate complete.")

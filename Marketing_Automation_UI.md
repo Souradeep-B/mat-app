@@ -214,10 +214,11 @@ Send the HTML approval report to recipients, wait for reply, and track approval 
 | Section | What it shows | User action |
 |---|---|---|
 | 1 — HTML Report Preview | Inline scrollable preview + Download HTML + Download PDF | Review and download |
-| 2 — Recipients | Default: `stacy.swicegood@optum.com` — editable | Edit if needed |
-| 3 — Send for Approval | "Send Approval Email" button with guard (see below) | Click to send |
-| 4 — Approval Status | Manual override: Mark as Approved / Mark as Rejected | Override if needed |
-| 5 — Next Step | "Proceed to Monitoring →" — enabled only after approval confirmed | Proceed |
+| 2 — Send for Approval | Subject line + **Approver selectbox** (users with Approver/Admin role) + "Send for Approval" with guard | Pick approver, send |
+| 3 — Approval Status | Manual override: Mark as Approved / Mark as Rejected | Override if needed |
+| 4 — Next Step | "Proceed to Monitoring →" — enabled only after approval confirmed | Proceed |
+
+> **No email in the approval flow (2026-06-11):** the Recipients section and Gmail send were REMOVED from the Approval Gate — approvals are 100% in-app (approvals table + dashboard inbox + notifications). `campaigns.approval_recipients` now stores the in-app approver's email. Gmail sending still exists only on Monitoring/ROI report pages.
 
 ### Send button guard
 
