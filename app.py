@@ -23,12 +23,16 @@ except Exception:
     pass  # no secrets.toml present (normal when running locally)
 
 # ── DB init (must run before any rendering) ───────────────────────────────────
-from db import init_db
+from db import init_db, now_iso
 from auth import (
     upsert_user, get_user, get_all_users, set_role, delete_user,
     ROLES, ALLOWED_DOMAIN, is_allowed_domain, role_badge_html,
     sign_token, verify_token, COOKIE_NAME
 )
+from campaigns import upsert_campaign, update_campaign, find_campaign
+import approvals as approvals_db
+import client_config as client_config_db
+import audience_files as audience_files_db
 init_db()
 
 # ── Anthropic / Claude API helpers ────────────────────────────────────────────
@@ -1030,6 +1034,23 @@ if selected == "1. Jira Intake":
             # Save to campaign_context — strip internal flags
             ctx = {k: v for k, v in summary.items() if not k.startswith("_")}
             st.session_state["campaign_context"] = ctx
+            # Persist to the campaigns table (the hub). Needs an identifier so
+            # re-confirms upsert the same row instead of creating duplicates.
+            if (ctx.get("OPM Ticket", "").strip() or ctx.get("WF Number", "").strip()):
+                try:
+                    _cuid = upsert_campaign({
+                        "opm_ticket":    ctx.get("OPM Ticket", "").strip(),
+                        "wf_number":     ctx.get("WF Number", "").strip(),
+                        "client":        ctx.get("Client", ""),
+                        "campaign_name": f"{ctx.get('Client', '')} {ctx.get('Campaign Type', '')}".strip(),
+                        "campaign_type": ctx.get("Campaign Type", ""),
+                        "channel":       ctx.get("Channel(s)", ctx.get("Channel", "")),
+                        "intake_date":   now_iso(),
+                        "created_by":    _current_user.get("email", ""),
+                    })
+                    st.session_state["campaign_uid"] = _cuid
+                except Exception as _db_err:
+                    st.warning(f"Campaign saved to session, but the database write failed: {_db_err}")
             st.session_state.pop("_brd_active_summary", None)  # clear so re-running intake starts fresh
             st.session_state["page_idx"] = 1
             st.session_state["_nav_pending"] = True
@@ -1286,30 +1307,73 @@ elif selected == "2. Audience Builder":
                 if _is_opm67:
                     # OPM-67 saved sample — use real Valero/Sanity values
                     st.session_state["s2_sanity_result"] = dict(_OPM67_SANITY)
+                    st.session_state["s2_source"] = "sample"
+                    # Cache to the client_config table so future campaigns for
+                    # this client resolve from the DB instantly.
+                    try:
+                        client_config_db.upsert_client_config(
+                            campaign.get("Client", "Valero") or "Valero",
+                            {
+                                "child_org_id":            _OPM67_SANITY.get("childOrgId", ""),
+                                "client_id":               _OPM67_SANITY.get("clientId", ""),
+                                "reward_max_cap":          _OPM67_SANITY.get("rewardMaxCap", ""),
+                                "reward_earning_end_date": _OPM67_SANITY.get("rewardEarningEndDate", ""),
+                                "total_affiliations":      _OPM67_SANITY.get("Total affiliations", ""),
+                                "included_affiliations":   _OPM67_SANITY.get("BRD includes", ""),
+                                "excluded_affiliations":   _OPM67_SANITY.get("Excluded", ""),
+                                "filter_decision":         _OPM67_SANITY.get("Filter decision", ""),
+                            },
+                        )
+                    except Exception:
+                        pass
                 else:
-                    # --- STUB: real Sanity MCP call not yet wired ---
-                    # Do NOT show OPM-67 data for other campaigns
-                    st.session_state["s2_sanity_result"] = {
-                        "childOrgId":           "— (connect to Sanity API)",
-                        "clientId":             "— (connect to Sanity API)",
-                        "rewardMaxCap":         "— (connect to Sanity API)",
-                        "rewardEarningEndDate": "— (connect to Sanity API)",
-                        "Total affiliations":   "— (connect to Sanity API)",
-                        "BRD includes":         "— (enter manually or connect API)",
-                        "Excluded":             "— (enter manually or connect API)",
-                        "Filter decision":      "— (enter manually or connect API)",
-                    }
+                    # Try the MAT database cache first (populated by previous
+                    # campaigns for the same client), then fall back to stub.
+                    _cc = None
+                    try:
+                        _cc = client_config_db.get_client_config(campaign.get("Client", "").strip())
+                    except Exception:
+                        pass
+                    if _cc and (_cc.get("child_org_id") or "").strip():
+                        st.session_state["s2_sanity_result"] = {
+                            "childOrgId":           _cc.get("child_org_id", ""),
+                            "clientId":             _cc.get("client_id", ""),
+                            "rewardMaxCap":         _cc.get("reward_max_cap", ""),
+                            "rewardEarningEndDate": _cc.get("reward_earning_end_date", ""),
+                            "Total affiliations":   _cc.get("total_affiliations", ""),
+                            "BRD includes":         _cc.get("included_affiliations", ""),
+                            "Excluded":             _cc.get("excluded_affiliations", ""),
+                            "Filter decision":      _cc.get("filter_decision", ""),
+                        }
+                        st.session_state["s2_source"] = "cache"
+                    else:
+                        # --- STUB: real Sanity MCP call not yet wired ---
+                        # Do NOT show OPM-67 data for other campaigns
+                        st.session_state["s2_sanity_result"] = {
+                            "childOrgId":           "— (connect to Sanity API)",
+                            "clientId":             "— (connect to Sanity API)",
+                            "rewardMaxCap":         "— (connect to Sanity API)",
+                            "rewardEarningEndDate": "— (connect to Sanity API)",
+                            "Total affiliations":   "— (connect to Sanity API)",
+                            "BRD includes":         "— (enter manually or connect API)",
+                            "Excluded":             "— (enter manually or connect API)",
+                            "Filter decision":      "— (enter manually or connect API)",
+                        }
+                        st.session_state["s2_source"] = "stub"
                 st.session_state["s2_fetched"] = True
 
         # Render results and confirm buttons OUTSIDE the fetch button conditional
         # so they persist across reruns (fixes the Streamlit button-in-button bug)
         if st.session_state["s2_fetched"]:
             sanity_result = st.session_state.get("s2_sanity_result", {})
+            _s2_source = st.session_state.get("s2_source", "stub")
             st.success("Sanity config fetched.")
             for k, v in sanity_result.items():
                 st.markdown(f"**{k}:** {v}")
             if _is_opm67:
                 st.info("ℹ️ Affiliation filter: using **NOT IN** because the exclusion list (1) is shorter than the inclusion list (10).")
+            elif _s2_source == "cache":
+                st.info("📦 Config loaded from the MAT database (cached from a previous campaign for this client). Verify it is still current.")
             else:
                 st.warning("⚠️ Sanity API not connected — affiliation filter details are placeholders. Connect the Sanity MCP or enter values manually.")
 
@@ -1517,6 +1581,12 @@ FROM audience;"""
                     notebook_link = "https://capillary-notebook-ushc.cloud.databricks.com/#notebook/stub"
                 st.success(f"Notebook created! [Open in Databricks]({notebook_link})")
                 st.session_state["s5_confirmed"] = True
+                # Record the notebook link on the campaign row
+                try:
+                    if st.session_state.get("campaign_uid"):
+                        update_campaign(st.session_state["campaign_uid"], notebook_link=notebook_link)
+                except Exception:
+                    pass
 
     # ══ SECTION 6 — Next Step ══════════════════════════════════════════════════
     # Appears as soon as Section 5 is visible — user doesn't have to click a notebook button first
@@ -1974,6 +2044,35 @@ elif selected == "3. Approval Gate":
                 st.session_state["ag_sent_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 st.session_state["ag_status"]  = "Awaiting"
                 st.success(f"✅ Email sent at {st.session_state['ag_sent_at']}")
+
+                # Record in the approvals table + campaign snapshot
+                try:
+                    _ag_cuid = st.session_state.get("campaign_uid")
+                    if not _ag_cuid:
+                        _ag_hit = find_campaign(campaign.get("OPM Ticket", "").strip()
+                                                or campaign.get("WF Number", "").strip())
+                        _ag_cuid = _ag_hit["campaign_uid"] if _ag_hit else None
+                        if _ag_cuid:
+                            st.session_state["campaign_uid"] = _ag_cuid
+                    if _ag_cuid:
+                        _ap_uid = approvals_db.create_approval(
+                            _ag_cuid,
+                            campaign.get("OPM Ticket", ""),
+                            _current_user.get("email", ""),
+                            recipients[0] if recipients else "",
+                            subject_line,
+                        )
+                        st.session_state["ag_approval_uid"] = _ap_uid
+                        update_campaign(
+                            _ag_cuid,
+                            approval_status="Awaiting",
+                            approval_sent_at=now_iso(),
+                            approval_updated_at=now_iso(),
+                            approval_subject_line=subject_line,
+                            approval_recipients=", ".join(recipients),
+                        )
+                except Exception as _ag_db_err:
+                    st.caption(f"(Approval recorded in session; DB write failed: {_ag_db_err})")
             except Exception as e:
                 st.error(f"Failed to send: {e}")
 
@@ -1992,13 +2091,27 @@ elif selected == "3. Approval Gate":
 
         st.caption("Manual override (for testing):")
         col_app, col_rej, _ = st.columns([1.6, 1.6, 2.8])
+        def _ag_record_decision(_decision: str):
+            """Write the approve/reject decision to the DB (history + snapshot)."""
+            try:
+                if st.session_state.get("ag_approval_uid"):
+                    approvals_db.set_status(st.session_state["ag_approval_uid"], _decision)
+                if st.session_state.get("campaign_uid"):
+                    update_campaign(st.session_state["campaign_uid"],
+                                    approval_status=_decision,
+                                    approval_updated_at=now_iso())
+            except Exception:
+                pass
+
         with col_app:
             if st.button("✅ Mark as Approved", key="ag_approve"):
                 st.session_state["ag_status"] = "Approved"
+                _ag_record_decision("Approved")
                 st.rerun()
         with col_rej:
             if st.button("❌ Mark as Rejected", key="ag_reject"):
                 st.session_state["ag_status"] = "Rejected"
+                _ag_record_decision("Rejected")
                 st.rerun()
 
     # ══ SECTION 5 — Next Step ════════════════════════════════════════════════
@@ -2256,6 +2369,11 @@ elif selected == "4. Monitoring":
     _mon_recipients = ["stacy.swicegood@optum.com"]
 
     # ══ CAMPAIGN SETUP ════════════════════════════════════════════════════════
+    # Pre-render hook: a keyed text_input ignores value= after first render, so
+    # the DB lookup stages the found ID here and we write it to the widget key
+    # BEFORE the widget is instantiated this run.
+    if "_mon_cid_pending" in st.session_state:
+        st.session_state["mon_cid_input"] = st.session_state.pop("_mon_cid_pending")
     _col1, _col2, _col3, _col4 = st.columns([1, 1, 1, 1])
     with _col1:
         _cid_in = st.text_input("Campaign ID", value=st.session_state["mon_cid_val"],
@@ -2278,11 +2396,21 @@ elif selected == "4. Monitoring":
 
     if (_mon_ticket or _mon_wf) and not _cid_in:
         if st.button("🔍 Look up Campaign ID", key="mon_lookup_btn"):
-            with st.spinner("Looking up Campaign ID…"):
-                # --- STUB: replace with real Databricks lookup ---
-                st.session_state["mon_cid_val"] = "52136"
-                st.warning("⚠️ **Stub result**: Campaign ID resolved to **52136** (Valero/OPM-67 example only). Real Databricks lookup not yet wired. Please verify or enter the correct Campaign ID manually.")
+            with st.spinner("Looking up campaign in the MAT database…"):
+                _mon_hit = find_campaign(_mon_ticket.strip() or _mon_wf.strip())
+            if _mon_hit and (_mon_hit.get("campaign_id") or "").strip():
+                st.session_state["mon_cid_val"] = _mon_hit["campaign_id"]
+                st.session_state["_mon_cid_pending"] = _mon_hit["campaign_id"]
                 st.rerun()
+            elif _mon_hit:
+                st.warning(
+                    f"Campaign **{_mon_hit.get('opm_ticket') or _mon_hit.get('wf_number')}** "
+                    f"({_mon_hit.get('client', '—')}) found in the MAT database, but no Campaign ID "
+                    "is recorded for it yet. Enter the platform Campaign ID manually."
+                )
+            else:
+                st.error("No campaign found for that ticket/WF number in the MAT database. "
+                         "Run Jira Intake for it first, or enter the Campaign ID manually.")
     _today_val = datetime.date.today()
     _dp = (_today_val - _launch_in).days
     if _dp > 0:
@@ -2639,6 +2767,10 @@ elif selected == "5. Post-Campaign ROI":
         return html
 
     # ── Inputs ────────────────────────────────────────────────────────────────
+    # Pre-render hook for the DB lookup (keyed text_input ignores value= after
+    # first render — stage the found ID and write it before instantiation).
+    if "_roi_cid_pending" in st.session_state:
+        st.session_state["roi_cid_input"] = st.session_state.pop("_roi_cid_pending")
     _roi_c1, _roi_c2, _roi_c3, _roi_c4, _roi_c5 = st.columns([1, 1, 1, 1, 1])
     with _roi_c1:
         _roi_cid = st.text_input(
@@ -2680,11 +2812,21 @@ elif selected == "5. Post-Campaign ROI":
 
     if (_roi_ticket or _roi_wf) and not _roi_cid:
         if st.button("🔍 Look up Campaign ID", key="roi_lookup_btn"):
-            with st.spinner("Looking up Campaign ID…"):
-                # --- STUB: replace with real Databricks lookup ---
-                st.session_state["roi_cid_val"] = "52136"
-                st.warning("⚠️ **Stub result**: Campaign ID resolved to **52136** (Valero/OPM-67 example only). Real Databricks lookup not yet wired. Please verify or enter the correct Campaign ID manually.")
+            with st.spinner("Looking up campaign in the MAT database…"):
+                _roi_hit = find_campaign(_roi_ticket.strip() or _roi_wf.strip())
+            if _roi_hit and (_roi_hit.get("campaign_id") or "").strip():
+                st.session_state["roi_cid_val"] = _roi_hit["campaign_id"]
+                st.session_state["_roi_cid_pending"] = _roi_hit["campaign_id"]
                 st.rerun()
+            elif _roi_hit:
+                st.warning(
+                    f"Campaign **{_roi_hit.get('opm_ticket') or _roi_hit.get('wf_number')}** "
+                    f"({_roi_hit.get('client', '—')}) found in the MAT database, but no Campaign ID "
+                    "is recorded for it yet. Enter the platform Campaign ID manually."
+                )
+            else:
+                st.error("No campaign found for that ticket/WF number in the MAT database. "
+                         "Run Jira Intake for it first, or enter the Campaign ID manually.")
 
     # ── Day N auto-caption ────────────────────────────────────────────────────
     _roi_day_n = 0
