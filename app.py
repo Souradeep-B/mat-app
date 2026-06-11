@@ -29,10 +29,14 @@ from auth import (
     ROLES, ALLOWED_DOMAIN, is_allowed_domain, role_badge_html,
     sign_token, verify_token, COOKIE_NAME
 )
-from campaigns import upsert_campaign, update_campaign, find_campaign
+from campaigns import (
+    upsert_campaign, update_campaign, find_campaign,
+    list_campaigns, list_campaigns_by_user, get_campaign_by_uid,
+)
 import approvals as approvals_db
 import client_config as client_config_db
 import audience_files as audience_files_db
+import notifications as notifications_db
 init_db()
 
 # ── Anthropic / Claude API helpers ────────────────────────────────────────────
@@ -330,9 +334,13 @@ if _logging_out:
     if _auth:
         try: _auth.logout()
         except Exception: pass
-    for _k in ["auth_user", "connected", "user_info", "_demo_step"]:
+    for _k in ["auth_user", "connected", "user_info", "_demo_step", "demo_email_in"]:
         st.session_state.pop(_k, None)
     st.query_params.clear()
+    # st.context.cookies is a SNAPSHOT taken at session start — it still
+    # contains the deleted cookie for the rest of this session. Block the
+    # cookie-restore path until a genuine fresh login or page reload.
+    st.session_state["_cookie_restore_blocked"] = True
     # Hard-delete BOTH auth cookies in the parent document immediately.
     # The OAuth library deletes its mat_session cookie via an async component;
     # check_authentification() can re-read the still-present cookie on the
@@ -351,7 +359,8 @@ if _logging_out:
 # A hard refresh starts a NEW Streamlit session, so session_state is empty.
 # We re-hydrate auth_user from the cookie that was set at login. Read is
 # synchronous (st.context.cookies) → no login-screen flash.
-if _IS_DEMO and not _logging_out and not st.session_state.get("auth_user"):
+if (_IS_DEMO and not _logging_out and not st.session_state.get("auth_user")
+        and not st.session_state.get("_cookie_restore_blocked")):
     try:
         _ck = st.context.cookies.get(COOKIE_NAME)
     except Exception:
@@ -837,6 +846,7 @@ st.components.v1.html(f"""
 """, height=0)
 
 PAGES = [
+    "🏠 Dashboard",
     "1. Jira Intake",
     "2. Audience Builder",
     "3. Approval Gate",
@@ -982,9 +992,135 @@ st.sidebar.caption("Optum Engage · B2C Campaigns · ⚡ MAT")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PAGE 0 — DASHBOARD (role-aware landing page)
+# ══════════════════════════════════════════════════════════════════════════════
+if selected == "🏠 Dashboard":
+
+    _me      = _current_user.get("email", "")
+    _first   = (_current_user.get("name", "") or "there").split()[0]
+    _is_admin = _current_role == "Admin"
+
+    st.title(f"Welcome back, {_first} 👋")
+    st.caption(f"{_me} · {_current_role}")
+    st.markdown("---")
+
+    # ── Data pulls (shared by the sections below) ─────────────────────────────
+    try:
+        _dash_camps   = list_campaigns() if _is_admin else list_campaigns_by_user(_me)
+    except Exception:
+        _dash_camps = []
+    try:
+        _dash_pending = approvals_db.get_pending_for(_me)
+    except Exception:
+        _dash_pending = []
+    try:
+        _dash_unread  = notifications_db.get_unread(_me)
+    except Exception:
+        _dash_unread = []
+
+    # ── Quick stats ───────────────────────────────────────────────────────────
+    _m1, _m2, _m3, _m4 = st.columns(4)
+    _m1.metric("Campaigns" + (" (all)" if _is_admin else ""), len(_dash_camps))
+    _m2.metric("Awaiting my approval", len(_dash_pending))
+    _m3.metric("Approved", sum(1 for c in _dash_camps if (c.get("approval_status") or "") == "Approved"))
+    _m4.metric("Unread notifications", len(_dash_unread))
+
+    # ── Approver inbox ────────────────────────────────────────────────────────
+    if _current_role in ("Admin", "Approver") or _dash_pending:
+        st.markdown("### 📥 Approvals waiting for you")
+        if not _dash_pending:
+            st.caption("Nothing pending — all clear.")
+        for _ap in _dash_pending:
+            _ap_camp = get_campaign_by_uid(_ap.get("campaign_uid", "")) or {}
+            with st.container(border=True):
+                _ai, _ab1, _ab2 = st.columns([3.4, 1.3, 1.3])
+                with _ai:
+                    st.markdown(
+                        f"**{_ap.get('opm_ticket') or _ap_camp.get('opm_ticket', '—')}** · "
+                        f"{_ap_camp.get('client', '—')} · {_ap_camp.get('campaign_type', '—')}"
+                    )
+                    st.caption(
+                        f"Requested by {_ap.get('requested_by', '—')} · {_ap.get('requested_at', '')[:16]}"
+                        + (f" · {_ap.get('report_ref')}" if _ap.get("report_ref") else "")
+                    )
+                with _ab1:
+                    if st.button("✅ Approve", type="primary", key=f"dash_ok_{_ap['approval_uid']}",
+                                 use_container_width=True):
+                        try:
+                            approvals_db.set_status(_ap["approval_uid"], "Approved")
+                            if _ap.get("campaign_uid"):
+                                update_campaign(_ap["campaign_uid"],
+                                                approval_status="Approved",
+                                                approval_updated_at=now_iso())
+                            notifications_db.notify(
+                                _ap.get("requested_by", ""), _ap.get("campaign_uid", ""),
+                                _ap.get("opm_ticket", ""),
+                                f"✅ {_ap.get('opm_ticket', 'Campaign')} was approved by {_me}",
+                            )
+                        except Exception as _e:
+                            st.error(f"Could not record the decision: {_e}")
+                        st.rerun()
+                with _ab2:
+                    if st.button("❌ Reject", key=f"dash_no_{_ap['approval_uid']}",
+                                 use_container_width=True):
+                        try:
+                            approvals_db.set_status(_ap["approval_uid"], "Rejected")
+                            if _ap.get("campaign_uid"):
+                                update_campaign(_ap["campaign_uid"],
+                                                approval_status="Rejected",
+                                                approval_updated_at=now_iso())
+                            notifications_db.notify(
+                                _ap.get("requested_by", ""), _ap.get("campaign_uid", ""),
+                                _ap.get("opm_ticket", ""),
+                                f"❌ {_ap.get('opm_ticket', 'Campaign')} was rejected by {_me}",
+                            )
+                        except Exception as _e:
+                            st.error(f"Could not record the decision: {_e}")
+                        st.rerun()
+        st.markdown("---")
+
+    # ── Notifications ─────────────────────────────────────────────────────────
+    if _dash_unread:
+        st.markdown("### 🔔 Notifications")
+        for _n in _dash_unread:
+            st.info(f"{_n.get('message', '')}  \n*{_n.get('created_at', '')[:16]}*")
+        if st.button("Mark all as read", key="dash_read_all"):
+            try:
+                notifications_db.mark_all_read(_me)
+            except Exception:
+                pass
+            st.rerun()
+        st.markdown("---")
+
+    # ── Campaigns table ───────────────────────────────────────────────────────
+    st.markdown("### 📋 " + ("All campaigns" if _is_admin else "My campaigns"))
+    if _dash_camps:
+        _rows = [{**{
+            "OPM Ticket":  c.get("opm_ticket", ""),
+            "WF Number":   c.get("wf_number", ""),
+            "Client":      c.get("client", ""),
+            "Type":        c.get("campaign_type", ""),
+            "Channel":     c.get("channel", ""),
+            "Campaign ID": c.get("campaign_id", "") or "—",
+            "Approval":    c.get("approval_status", "") or "—",
+            "Created":     (c.get("row_created_at", "") or "")[:10],
+        }, **({"Created by": c.get("created_by", "")} if _is_admin else {})}
+            for c in _dash_camps]
+        st.dataframe(_rows, use_container_width=True, hide_index=True)
+    else:
+        st.caption("No campaigns yet — start one below.")
+
+    if st.button("➕ Start New Campaign", type="primary", key="dash_new"):
+        st.session_state["page_idx"] = PAGES.index("1. Jira Intake")
+        st.session_state["_nav_pending"] = True
+        st.session_state["_scroll_top"] = True
+        st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — JIRA INTAKE
 # ══════════════════════════════════════════════════════════════════════════════
-if selected == "1. Jira Intake":
+elif selected == "1. Jira Intake":
 
     st.title("Jira Intake")
     st.markdown("Choose how you want to start — enter an OPM ticket number or upload a BRD PDF directly.")
@@ -1052,7 +1188,7 @@ if selected == "1. Jira Intake":
                 except Exception as _db_err:
                     st.warning(f"Campaign saved to session, but the database write failed: {_db_err}")
             st.session_state.pop("_brd_active_summary", None)  # clear so re-running intake starts fresh
-            st.session_state["page_idx"] = 1
+            st.session_state["page_idx"] = PAGES.index("2. Audience Builder")
             st.session_state["_nav_pending"] = True
             st.session_state["_scroll_top"] = True
             st.rerun()
@@ -1289,7 +1425,7 @@ elif selected == "2. Audience Builder":
                     st.success("Context confirmed. Section 2 unlocked.")
         with col_edit:
             if st.button("Edit / Re-run intake", key="s1_edit"):
-                st.session_state["page_idx"] = 0
+                st.session_state["page_idx"] = PAGES.index("1. Jira Intake")
                 st.session_state["_nav_pending"] = True
                 st.session_state["_scroll_top"] = True
                 st.rerun()
@@ -1604,7 +1740,7 @@ FROM audience;"""
                 "Channel":        campaign["Channel"],
                 "Affiliations":   campaign["Affiliations"],
             }
-            st.session_state["page_idx"] = 2
+            st.session_state["page_idx"] = PAGES.index("3. Approval Gate")
             st.session_state["_nav_pending"] = True
             st.session_state["_scroll_top"] = True
             st.rerun()
@@ -2023,13 +2159,33 @@ elif selected == "3. Approval Gate":
     st.markdown("### Section 3 — Send for Approval")
     st.code(subject_line, language=None)
 
+    # In-app approver: the request appears on this person's MAT dashboard with
+    # Approve/Reject buttons. Email recipients above are the FYI channel; the
+    # in-app decision is the system of record.
+    try:
+        _ag_approver_opts = [u["email"] for u in get_all_users()
+                             if u.get("role") in ("Approver", "Admin")]
+    except Exception:
+        _ag_approver_opts = []
+    if _ag_approver_opts:
+        _ag_inapp_approver = st.selectbox(
+            "In-app approver (sees this request on their MAT dashboard)",
+            _ag_approver_opts, key="ag_inapp_approver",
+        )
+    else:
+        _ag_inapp_approver = ""
+        st.caption("ℹ️ No users with the Approver role yet — assign one in the Admin Panel "
+                   "to enable in-app approvals.")
+
     _ag_has_data = bool(campaign.get("OPM Ticket", "").strip() or campaign.get("Client", "").strip())
     if not _ag_has_data:
         st.warning("⚠️ No campaign data found. Please complete Jira Intake → Audience Builder first, or enter details manually above, before sending the approval email.")
-    elif st.button("📨 Send Approval Email", type="primary", key="ag_send"):
+    elif st.button("📨 Send for Approval", type="primary", key="ag_send"):
+        # 1) Email is the notification channel — failure must NOT block the
+        #    in-app approval record.
+        _ag_email_ok = False
         with st.spinner("Sending via Gmail..."):
             try:
-                # --- Real Gmail send ---
                 msg = MIMEMultipart("alternative")
                 msg["Subject"] = subject_line
                 msg["From"]    = GMAIL_SENDER
@@ -2039,42 +2195,55 @@ elif selected == "3. Approval Gate":
                 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                     server.login(GMAIL_SENDER, GMAIL_PASSWORD)
                     server.sendmail(GMAIL_SENDER, recipients, msg.as_string())
-
-                st.session_state["ag_sent"]    = True
-                st.session_state["ag_sent_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state["ag_status"]  = "Awaiting"
-                st.success(f"✅ Email sent at {st.session_state['ag_sent_at']}")
-
-                # Record in the approvals table + campaign snapshot
-                try:
-                    _ag_cuid = st.session_state.get("campaign_uid")
-                    if not _ag_cuid:
-                        _ag_hit = find_campaign(campaign.get("OPM Ticket", "").strip()
-                                                or campaign.get("WF Number", "").strip())
-                        _ag_cuid = _ag_hit["campaign_uid"] if _ag_hit else None
-                        if _ag_cuid:
-                            st.session_state["campaign_uid"] = _ag_cuid
-                    if _ag_cuid:
-                        _ap_uid = approvals_db.create_approval(
-                            _ag_cuid,
-                            campaign.get("OPM Ticket", ""),
-                            _current_user.get("email", ""),
-                            recipients[0] if recipients else "",
-                            subject_line,
-                        )
-                        st.session_state["ag_approval_uid"] = _ap_uid
-                        update_campaign(
-                            _ag_cuid,
-                            approval_status="Awaiting",
-                            approval_sent_at=now_iso(),
-                            approval_updated_at=now_iso(),
-                            approval_subject_line=subject_line,
-                            approval_recipients=", ".join(recipients),
-                        )
-                except Exception as _ag_db_err:
-                    st.caption(f"(Approval recorded in session; DB write failed: {_ag_db_err})")
+                _ag_email_ok = True
             except Exception as e:
-                st.error(f"Failed to send: {e}")
+                st.error(f"Email failed (approval still recorded in-app): {e}")
+
+        # 2) The in-app approval — system of record.
+        st.session_state["ag_sent"]    = True
+        st.session_state["ag_sent_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state["ag_status"]  = "Awaiting"
+        try:
+            _ag_cuid = st.session_state.get("campaign_uid")
+            if not _ag_cuid:
+                _ag_hit = find_campaign(campaign.get("OPM Ticket", "").strip()
+                                        or campaign.get("WF Number", "").strip())
+                _ag_cuid = _ag_hit["campaign_uid"] if _ag_hit else None
+                if _ag_cuid:
+                    st.session_state["campaign_uid"] = _ag_cuid
+            if _ag_cuid:
+                _ap_uid = approvals_db.create_approval(
+                    _ag_cuid,
+                    campaign.get("OPM Ticket", ""),
+                    _current_user.get("email", ""),
+                    _ag_inapp_approver or (recipients[0] if recipients else ""),
+                    subject_line,
+                )
+                st.session_state["ag_approval_uid"] = _ap_uid
+                update_campaign(
+                    _ag_cuid,
+                    approval_status="Awaiting",
+                    approval_sent_at=now_iso(),
+                    approval_updated_at=now_iso(),
+                    approval_subject_line=subject_line,
+                    approval_recipients=", ".join(recipients),
+                )
+                if _ag_inapp_approver:
+                    notifications_db.notify(
+                        _ag_inapp_approver, _ag_cuid,
+                        campaign.get("OPM Ticket", ""),
+                        f"📨 Approval requested for {campaign.get('OPM Ticket', 'campaign')} "
+                        f"({campaign.get('Client', '—')}) by {_current_user.get('email', '')}",
+                    )
+                st.success(
+                    ("✅ Email sent and approval" if _ag_email_ok else "✅ Approval")
+                    + f" assigned to **{_ag_inapp_approver or '—'}** — it is now in their dashboard inbox."
+                )
+            else:
+                st.warning("Campaign not found in the MAT database — run Jira Intake for this "
+                           "ticket first so the approval can be tracked in-app.")
+        except Exception as _ag_db_err:
+            st.error(f"In-app approval could not be recorded: {_ag_db_err}")
 
     # ══ SECTION 4 — Approval Status ══════════════════════════════════════════
     if st.session_state["ag_sent"]:
@@ -2092,10 +2261,19 @@ elif selected == "3. Approval Gate":
         st.caption("Manual override (for testing):")
         col_app, col_rej, _ = st.columns([1.6, 1.6, 2.8])
         def _ag_record_decision(_decision: str):
-            """Write the approve/reject decision to the DB (history + snapshot)."""
+            """Write the approve/reject decision to the DB (history + snapshot + notify)."""
             try:
                 if st.session_state.get("ag_approval_uid"):
                     approvals_db.set_status(st.session_state["ag_approval_uid"], _decision)
+                    _ap_row = approvals_db.get_approval(st.session_state["ag_approval_uid"])
+                    if _ap_row and _ap_row.get("requested_by"):
+                        _icon = "✅" if _decision == "Approved" else "❌"
+                        notifications_db.notify(
+                            _ap_row["requested_by"], _ap_row.get("campaign_uid", ""),
+                            _ap_row.get("opm_ticket", ""),
+                            f"{_icon} {_ap_row.get('opm_ticket', 'Campaign')} was "
+                            f"{_decision.lower()} by {_current_user.get('email', '')}",
+                        )
                 if st.session_state.get("campaign_uid"):
                     update_campaign(st.session_state["campaign_uid"],
                                     approval_status=_decision,
@@ -2119,7 +2297,7 @@ elif selected == "3. Approval Gate":
         st.markdown("---")
         st.success("✅ Approval Gate complete.")
         if st.button("Proceed to Monitoring →", type="primary"):
-            st.session_state["page_idx"] = 3
+            st.session_state["page_idx"] = PAGES.index("4. Monitoring")
             st.session_state["_nav_pending"] = True
             st.session_state["_scroll_top"] = True
             st.rerun()
@@ -2508,7 +2686,7 @@ elif selected == "4. Monitoring":
             f"{st.session_state.get('mon_sent_at', '')}"
         )
         if st.button("Proceed to Post-Campaign ROI →", type="primary", key="mon_proceed_btn"):
-            st.session_state["page_idx"] = 4
+            st.session_state["page_idx"] = PAGES.index("5. Post-Campaign ROI")
             st.session_state["_nav_pending"] = True
             st.session_state["_scroll_top"] = True
             st.rerun()

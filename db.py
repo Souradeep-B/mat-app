@@ -44,4 +44,5 @@ def init_db():
     import client_config   # noqa: F401  per-client Sanity config cache
     import approvals       # noqa: F401  approval workflow history
     import audience_files  # noqa: F401  audience file refs (Drive links + counts, no PII)
+    import notifications   # noqa: F401  in-app notifications (dashboard)
     metadata.create_all(engine)

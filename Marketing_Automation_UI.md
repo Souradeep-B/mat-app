@@ -936,10 +936,48 @@ Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flex
 - **⚠️ Keyed text_input gotcha:** `value=` is IGNORED after first render. To programmatically fill `mon_cid_input`/`roi_cid_input`, stage via `_mon_cid_pending`/`_roi_cid_pending` and write to the widget key BEFORE instantiation (pre-render hook, same pattern as `_nav_pending`).
 - `audience_files` writes NOT yet wired — no real Drive upload exists in the app yet; wire it the moment Drive upload lands.
 
-**Remaining Phase 2:**
-- [ ] Tier 2: delivery_metrics + roi_metrics (save report snapshots on generate)
-- [ ] Tier 3: audit_log, notifications, email_log, knowledge_entries
+## 📊 DATABASE TABLE TRACKER (single source of truth — keep updated)
+
+| Table | Tier | Status | Module | Wired into UI |
+|---|---|---|---|---|
+| `users` | 1 | ✅ Created | auth.py | Login, Admin Panel, AG approver list |
+| `campaigns` | 1 | ✅ Created | campaigns.py | Intake write, Mon/ROI lookup, Dashboard table, AG snapshot |
+| `client_config` | 1 | ✅ Created | client_config.py | AB §2 (cache write + read) |
+| `approvals` | 1 | ✅ Created | approvals.py | AG send, Dashboard inbox + Approve/Reject |
+| `audience_files` | 1 | ✅ Created | audience_files.py | ⏳ Not wired — waiting on real Drive upload |
+| `notifications` | 3→pulled fwd | ✅ Created | notifications.py | AG send, Dashboard inbox decisions, Dashboard bell |
+| `delivery_metrics` | 2 | ⏳ DEFERRED (file drafted, NOT registered) | delivery_metrics.py exists | — |
+| `roi_metrics` | 2 | ❌ Not created | — | — |
+| `audit_log` | 3 | ❌ Not created | — | — |
+| `email_log` | 3 | ❌ Not created | — | — |
+| `knowledge_entries` | 3 | ❌ Not created | — | — |
+| `scheduled_jobs` | 4 | ❌ Not created | — | — |
+
+> To register a new table: create module on `db.engine/metadata` pattern → add import in `db.init_db()` → restart.
+
+## Dashboard (Page 0) + In-App Approval Flow — BUILT ✅ (2026-06-11, verified end-to-end in browser)
+
+**Dashboard** (`🏠 Dashboard`, first nav item, default landing — `page_idx=0`):
+- Header: "Welcome back, {first name}" + email + role.
+- 4 stat cards: campaigns (all for Admin / mine otherwise), awaiting-my-approval, approved, unread notifications.
+- **Approver inbox** (Admin/Approver roles): one bordered card per `approvals.get_pending_for(me)` — ticket · client · type, requester + time, ✅ Approve / ❌ Reject buttons → `set_status` + campaign snapshot + `notifications.notify(requested_by)` + rerun.
+- **Notifications**: unread list + "Mark all as read".
+- Campaigns table (st.dataframe) + "Start New Campaign →".
+- Nav buttons now use `PAGES.index("...")` (never hardcode page numbers — Dashboard insertion shifted all indices).
+
+**Approval flow (system of record = in-app, email = FYI):**
+- AG Section 3 has an **In-app approver selectbox** (users with Approver/Admin role). Send = try Gmail (failure does NOT block) → `create_approval(assigned_to=in-app approver)` → campaign snapshot → notify approver. Requires the campaign to exist in DB (intake first) — warns otherwise.
+- Approver acts from THEIR dashboard (cross-user, cross-session — all via Supabase). Requester sees ✅/❌ notification + Approved metric on next dashboard load.
+- Verified flow: bhattacharjee sends (Gmail failed → approval still recorded) → approver.demo sees 2 pending → approves → bhattacharjee sees "OPM-67 was approved by approver.demo" notification. ✅
+
+**⚠️ CRITICAL BUG FIXED — `st.context.cookies` is a session-start SNAPSHOT:**
+It never updates mid-session. After sign-out, the next rerun re-read the stale snapshot and silently re-logged the previous user in (~3s bounce, or instantly on next click). Fix: logout sets `st.session_state["_cookie_restore_blocked"]=True`, and the cookie-restore path checks it. Logout also pops `demo_email_in` so the login form doesn't retain the previous user's email.
+
+**Remaining Phase 2 (deferred until after demo):**
+- [ ] Tier 2: delivery_metrics (drafted, unregistered) + roi_metrics — save report snapshots on generate
+- [ ] Tier 3: audit_log, email_log, knowledge_entries
 - [ ] Tier 4: scheduled_jobs
+- [ ] Wire audience_files when Drive upload lands
 
 #### Phase 3 — Dashboards (~2 days)
 - [ ] Add Page 0 — Dashboard (role-aware landing page)
