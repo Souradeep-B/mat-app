@@ -12,3 +12,12 @@ runOnSave = false
 toolbarMode = "auto"
 # Don't surface Python tracebacks in the toolbar as toast errors.
 showErrorDetails = true
+
+[theme]
+# MAT design system — modern minimal. Teal brand accent on a neutral canvas.
+base = "light"
+primaryColor = "#007B8F"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F8FA"
+textColor = "#1A202C"
+font = "sans serif"

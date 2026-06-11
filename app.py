@@ -134,6 +134,175 @@ st.set_page_config(
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
+# GLOBAL DESIGN SYSTEM — cosmetic only, no logic.
+# Modern minimal theme: Inter typeface, uniform 38px buttons, card-style
+# expanders/metrics, compact vertical rhythm, consistent radii (8/10px).
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Base typography & canvas ─────────────────────────────────────────── */
+html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"],
+button, input, textarea, select {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+[data-testid="stAppViewContainer"] { background: #FAFBFC; }
+.block-container {
+    padding-top: 2.2rem !important;
+    padding-bottom: 4rem !important;
+    max-width: 1180px;
+}
+
+/* Headings — one consistent scale everywhere */
+h1 { font-size: 1.55rem !important; font-weight: 800 !important;
+     letter-spacing: -0.02em !important; color: #0F172A !important;
+     padding-bottom: 0 !important; margin-bottom: 0.35rem !important; }
+h2 { font-size: 1.15rem !important; font-weight: 700 !important; color: #0F172A !important; }
+h3 { font-size: 0.98rem !important; font-weight: 700 !important; color: #1E293B !important; }
+p, li, label { color: #334155; }
+[data-testid="stCaptionContainer"] { color: #64748B !important; }
+
+/* Dividers — compact, subtle */
+hr { margin: 0.9rem 0 !important; border: none !important;
+     border-top: 1px solid #E8ECF1 !important; }
+
+/* Tighter default vertical rhythm in the main column */
+section.main [data-testid="stVerticalBlock"] { gap: 0.65rem; }
+
+/* ── Buttons — ONE size everywhere (regular, download, form-submit) ───── */
+.stButton > button, .stDownloadButton > button, .stFormSubmitButton > button,
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"] {
+    min-height: 38px !important;
+    height: 38px;
+    padding: 0.45rem 1.15rem !important;
+    border-radius: 8px !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em;
+    box-shadow: none !important;
+    transition: all .15s ease;
+    white-space: nowrap !important;
+    min-width: max-content;
+}
+.stButton > button p, .stDownloadButton > button p, .stFormSubmitButton > button p {
+    white-space: nowrap !important;
+    font-size: 0.875rem !important;
+}
+/* Primary — solid brand teal (prefix match covers primaryFormSubmit too) */
+[data-testid^="stBaseButton-primary"], button[kind^="primary"] {
+    background: #007B8F !important;
+    border: 1px solid #007B8F !important;
+    color: #FFFFFF !important;
+}
+[data-testid^="stBaseButton-primary"] p, button[kind^="primary"] p { color: #FFFFFF !important; }
+[data-testid^="stBaseButton-primary"]:hover, button[kind^="primary"]:hover {
+    background: #00697A !important;
+    border-color: #00697A !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,123,143,0.25) !important;
+}
+/* Secondary — quiet outline (prefix match covers secondaryFormSubmit too) */
+[data-testid^="stBaseButton-secondary"], button[kind^="secondary"] {
+    background: #FFFFFF !important;
+    border: 1px solid #D7DEE6 !important;
+    color: #1E293B !important;
+}
+[data-testid^="stBaseButton-secondary"]:hover, button[kind^="secondary"]:hover {
+    border-color: #007B8F !important;
+    color: #007B8F !important;
+    background: #F0FAFB !important;
+}
+button:disabled { opacity: 0.45 !important; }
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
+    border-radius: 8px !important;
+    border-color: #D7DEE6 !important;
+    background: #FFFFFF !important;
+}
+[data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within {
+    border-color: #007B8F !important;
+    box-shadow: 0 0 0 3px rgba(0,123,143,0.12) !important;
+}
+[data-testid="stWidgetLabel"] p { font-size: 0.82rem; font-weight: 600; color: #475569; }
+
+/* ── Expanders — clean cards ──────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    border: 1px solid #E8ECF1 !important;
+    border-radius: 12px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+    overflow: hidden;
+}
+[data-testid="stExpander"] summary {
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    padding: 0.8rem 1rem !important;
+}
+[data-testid="stExpander"] summary:hover { color: #007B8F !important; }
+
+/* ── Metrics — stat cards ─────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: #FFFFFF;
+    border: 1px solid #E8ECF1;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+}
+[data-testid="stMetricLabel"] p { font-size: 0.75rem !important; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; color: #64748B !important; }
+[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 700 !important; }
+
+/* ── Alerts / info / status ───────────────────────────────────────────── */
+[data-testid="stAlert"] { border-radius: 10px !important; border-width: 1px !important; }
+[data-testid="stStatusWidget"], [data-testid="stExpanderDetails"] { font-size: 0.9rem; }
+div[data-testid="stStatus"] { border-radius: 12px !important; }
+
+/* ── Code blocks ──────────────────────────────────────────────────────── */
+.stCode, pre, code { border-radius: 8px !important; font-size: 0.82rem !important; }
+pre { border: 1px solid #E8ECF1 !important; }
+
+/* ── Forms — remove double borders ────────────────────────────────────── */
+[data-testid="stForm"] {
+    border: 1px solid #E8ECF1 !important;
+    border-radius: 12px !important;
+    background: #FFFFFF;
+    padding: 1.1rem 1.2rem !important;
+}
+
+/* ── Radio groups (incl. horizontal toggles) ──────────────────────────── */
+[role="radiogroup"] label { font-size: 0.9rem; }
+
+/* ── Sidebar — refined nav ────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #FFFFFF !important;
+    border-right: 1px solid #E8ECF1 !important;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    padding: 7px 10px !important;
+    border-radius: 8px !important;
+    width: 100%;
+    transition: background .12s ease;
+    margin: 0 !important;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: #F1F5F9; }
+[data-testid="stSidebar"] [role="radiogroup"] label p { font-size: 0.88rem !important; font-weight: 500; }
+[data-testid="stSidebar"] hr { margin: 0.55rem 0 !important; }
+
+/* ── Tables / dataframes ──────────────────────────────────────────────── */
+[data-testid="stTable"], [data-testid="stDataFrame"] {
+    border: 1px solid #E8ECF1 !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+
+/* ── Toggle switch label ──────────────────────────────────────────────── */
+[data-testid="stToggle"] label p { font-size: 0.86rem !important; font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
 # AUTH GATE — runs before any page rendering
 # AUTH_MODE=demo    → simulated login screen (Path B — hackathon demo, no Google)
 # AUTH_MODE=google  → real Google OAuth via google_credentials.json (Path A)
@@ -1081,7 +1250,7 @@ elif selected == "2. Audience Builder":
             for k, v in items[half:]:
                 st.markdown(f"**{k}:** {v}")
         st.caption("Carried from Jira Intake. Use the Edit button if any detail looks wrong.")
-        col_ok, col_edit, _ = st.columns([1, 1, 4])
+        col_ok, col_edit, _ = st.columns([1.6, 1.6, 2.8])
         with col_ok:
             if st.button("Looks good — proceed", type="primary", key="s1_ok"):
                 if not any(str(v).strip() for v in campaign.values()):
@@ -1138,7 +1307,7 @@ elif selected == "2. Audience Builder":
             else:
                 st.warning("⚠️ Sanity API not connected — affiliation filter details are placeholders. Connect the Sanity MCP or enter values manually.")
 
-            col_ok, col_flag, _ = st.columns([1, 1, 4])
+            col_ok, col_flag, _ = st.columns([1.6, 1.6, 2.8])
             with col_ok:
                 if st.button("Affiliation list looks correct", type="primary", key="s2_ok"):
                     st.session_state["s2_confirmed"] = True
@@ -1165,7 +1334,7 @@ elif selected == "2. Audience Builder":
             for name, ext_id in activities.items():
                 st.markdown(f"- **{name}:** `{ext_id}`")
 
-            col_ok, col_flag, _ = st.columns([1, 1, 4])
+            col_ok, col_flag, _ = st.columns([1.6, 1.6, 2.8])
             with col_ok:
                 if st.button("Activities are correct", type="primary", key="s3_ok"):
                     st.session_state["s3_confirmed"] = True
@@ -1330,7 +1499,7 @@ FROM audience;"""
         notebook_name = "_".join(_nb_parts)
         st.markdown(f"**Notebook name:** `{notebook_name}`")
 
-        col_copy, col_create, _ = st.columns([1, 1, 3])
+        col_copy, col_create, _ = st.columns([1.5, 1.5, 2])
         with col_copy:
             if st.button("📋 Copy Query to Clipboard", use_container_width=True, key="s5_copy"):
                 st.success("Query copied. Paste it into your Databricks notebook manually.")
@@ -1742,7 +1911,7 @@ elif selected == "3. Approval Gate":
     # ══ SECTION 1 — HTML Report Preview ══════════════════════════════════════
     st.markdown("### Section 1 — Approval Report Preview")
     st.components.v1.html(stub_html, height=700, scrolling=True)
-    col_html, col_pdf, _ = st.columns([1, 1, 4])
+    col_html, col_pdf, _ = st.columns([1.6, 1.6, 2.8])
     with col_html:
         st.download_button("⬇ Download HTML", data=stub_html,
                            file_name=f"{campaign['OPM Ticket']}_Approval_Report.html",
@@ -1816,7 +1985,7 @@ elif selected == "3. Approval Gate":
             st.error("❌ Rejected — no further action taken")
 
         st.caption("Manual override (for testing):")
-        col_app, col_rej, _ = st.columns([1, 1, 4])
+        col_app, col_rej, _ = st.columns([1.6, 1.6, 2.8])
         with col_app:
             if st.button("✅ Mark as Approved", key="ag_approve"):
                 st.session_state["ag_status"] = "Approved"
@@ -2151,7 +2320,7 @@ elif selected == "4. Monitoring":
             f"[DELIVERY REPORT Day {_dn}] Campaign {_cid} | "
             f"{_stub_camp['client']} {_stub_camp['campaign']}"
         )
-        _c1, _c2, _c3, _ = st.columns([1, 1, 1, 3])
+        _c1, _c2, _c3, _ = st.columns([1.4, 1.4, 1.4, 1.8])
         with _c1:
             st.download_button(
                 "⬇ Download HTML",
@@ -2548,7 +2717,7 @@ elif selected == "5. Post-Campaign ROI":
         _dn   = st.session_state.get("roi_day_n", _roi_day_n)
         _cid  = st.session_state["roi_cid_val"]
 
-        _rc1, _rc2, _rc3, _ = st.columns([1, 1, 1, 3])
+        _rc1, _rc2, _rc3, _ = st.columns([1.4, 1.4, 1.4, 1.8])
         with _rc1:
             st.download_button(
                 "⬇ Download HTML",
