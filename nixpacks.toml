@@ -1,0 +1,6 @@
+# Railway (Nixpacks) build config — system libraries needed by the PDF chain
+# (xhtml2pdf -> svglib -> rlPyCairo -> pycairo compiles against cairo).
+# Equivalent of packages.txt on Streamlit Cloud.
+
+[phases.setup]
+aptPkgs = ["pkg-config", "libcairo2-dev", "libffi-dev"]
