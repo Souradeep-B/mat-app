@@ -935,6 +935,14 @@ Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flex
 
 **Approver dropdown rule (2026-06-11):** AG "Send for Approval" lists ONLY users whose role == `Approver` (Admins excluded). Roles are single-valued — a user is Admin OR Approver, never both. Self-approval works mechanically (assign yourself → the request lands in your own dashboard inbox), but the dropdown only offers Approver-role users.
 
+**Approver card extras (2026-06-11):**
+- **Report link:** the full audience report HTML is stored on the approval row (`approvals.report_html`, TEXT — added via `db._migrate()` ALTER) at send time. The card renders "📄 Open audience summary report ↗" — a `components.html` anchor whose href is a client-side **blob URL** built from the base64-encoded HTML (`Uint8Array.from(atob(...))` to preserve UTF-8). Opens in a new tab; no popup-block because the anchor click is a user gesture. Do NOT try `data:` URLs (Chrome blocks top-level navigation) or Streamlit static serving (Railway FS is ephemeral).
+- **Repull request:** date picker (min=today, default tomorrow) + "🔁 Request repull" → sets approval status `Repull Requested` (notes "Repull on YYYY-MM-DD"), writes `campaigns.repull_date / repull_requested_by / repull_requested_at` (**the scheduled flow picks campaigns up by `repull_date`**), notifies the requester. Card leaves the inbox (inbox = status Pending only).
+
+**AG live status sync (2026-06-11):** Section 3 re-reads `approvals.get_approval(ag_approval_uid)` every run and adopts any non-Pending status (the approver acts in a different session). While "Awaiting", `streamlit_autorefresh.st_autorefresh(interval=10_000)` reruns the page every 10s (fallback: JS `location.reload()` if the package is missing). Approved shows approver + acted_at; `Repull Requested` has its own info message. Package: `streamlit-autorefresh` (in requirements.txt).
+
+**Schema migrations:** `db._migrate()` runs after `create_all()` on every startup — a list of idempotent `ALTER TABLE ... ADD COLUMN` statements (try/except per stmt; create_all NEVER adds columns to existing tables). Add new columns BOTH to the Table definition and to `_migrate()`.
+
 ## 📊 DATABASE TABLE TRACKER (single source of truth — keep updated)
 
 | Table | Tier | Status | Module | Wired into UI |
