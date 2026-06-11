@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "buildAptPackages": ["pkg-config", "libcairo2-dev", "libffi-dev"],
+  "deploy": {
+    "aptPackages": ["libcairo2"],
+    "startCommand": "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+  }
+}
