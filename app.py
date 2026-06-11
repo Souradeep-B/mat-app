@@ -882,6 +882,18 @@ if _current_role == "Admin":
 # ── OPM-67 saved sample dataset ───────────────────────────────────────────────
 # This is the ONLY pre-loaded sample. It activates ONLY when the user enters
 # "OPM-67" in Jira Intake. Every other ticket + no API → blank/placeholder only.
+
+# Curated sample reports (audience / delivery / roi) served for OPM-67 only.
+_OPM67_REPORTS_DIR = os.path.join(os.path.dirname(__file__), "opm67_reports")
+
+def _load_opm67_report(name: str):
+    """Return the curated OPM-67 sample report HTML, or None if missing."""
+    try:
+        with open(os.path.join(_OPM67_REPORTS_DIR, f"{name}_report.html"),
+                  encoding="utf-8") as _f:
+            return _f.read()
+    except Exception:
+        return None
 _OPM67_BRD = {
     "Client":                "Valero",
     "Campaign Type":         "Progress",
@@ -2202,6 +2214,12 @@ elif selected == "3. Approval Gate":
 </body>
 </html>"""
 
+    # ── OPM-67 demo: use the curated sample audience report ───────────────────
+    if campaign.get("OPM Ticket", "").strip().upper() == "OPM-67":
+        _opm67_aud_html = _load_opm67_report("audience")
+        if _opm67_aud_html:
+            stub_html = _opm67_aud_html
+
     # ══ SECTION 1 — HTML Report Preview ══════════════════════════════════════
     st.markdown("### Section 1 — Approval Report Preview")
     st.components.v1.html(stub_html, height=700, scrolling=True)
@@ -2698,6 +2716,11 @@ elif selected == "4. Monitoring":
             _gen_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             st.session_state["mon_report_html"] = generate_delivery_html(
                 _stub_camp, _rd, _stub_daily, _gen_dt, _day_n)
+            # OPM-67 demo: serve the curated sample delivery report
+            if _is_opm67_mon or _cid_in.strip() == "52136":
+                _opm67_del = _load_opm67_report("delivery")
+                if _opm67_del:
+                    st.session_state["mon_report_html"] = _opm67_del
             st.session_state["mon_day_n"] = _day_n
         st.success(f"Day {_day_n} report generated.")
 
@@ -3111,6 +3134,11 @@ elif selected == "5. Post-Campaign ROI":
                 _roi_stub_camp, _roi_stub_delivery, _roi_stub_comp,
                 _roi_stub_buckets, _dt_cls.now(), _roi_day_n, _roi_camp_type
             )
+        # OPM-67 demo: serve the curated sample ROI report
+        if _is_opm67_roi or _roi_cid.strip() == "52136":
+            _opm67_roi_html = _load_opm67_report("roi")
+            if _opm67_roi_html:
+                _roi_html = _opm67_roi_html
         st.session_state["roi_report_html"] = _roi_html
         st.success(f"T+{_roi_day_n} ROI report generated.")
 
