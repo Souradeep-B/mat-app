@@ -868,6 +868,12 @@ Both the Jira MCP and Drive MCP are already available in this Claude session —
 
 **`.env` keys (auth):** `AUTH_MODE` (`demo`/`google`), `ADMIN_EMAIL` (bootstrap admin), `COOKIE_SECRET` (OAuth cookie signing).
 
+**Google SSO — hosting findings (2026-06-11, CORRECTED):**
+- On **Streamlit Cloud** (`mat-capillary.streamlit.app`): immediate Google 403 before any account picker. Initially suspected a Workspace org block — **that diagnosis was WRONG**.
+- On **Railway**: the Google account picker appears and authentication succeeds → the 403 was Streamlit-Cloud-hosting-related, not an org policy. **Use Railway for Google SSO.**
+- **PKCE bug + fix:** after authenticating, `(invalid_grant) Missing code verifier` — the OAuth redirect lands in a fresh Streamlit session, losing the PKCE `code_verifier` (newer `google-auth-oauthlib` ≥1.4 enables PKCE by default; older local versions don't, which is why it never reproduced locally). Fix in app.py PATH A: after constructing `Authenticate`, set `_authenticator.flow.autogenerate_code_verifier = False` and `code_verifier = None` (web-app clients use client_secret; PKCE optional).
+- **Railway deploy config:** `railpack.json` (Railpack builder ignores nixpacks.toml/Procfile) — buildAptPackages `pkg-config, libcairo2-dev, libffi-dev`, deploy aptPackages `libcairo2`, startCommand binds streamlit to `$PORT`. `.python-version` pins 3.12 (3.13 has no mise prebuilt + missing wheels). Env vars set directly in Railway Variables (no st.secrets needed — the os.environ bridge handles both).
+
 **Sidebar spacing:** Tightened so all 6 nav items (5 pages + Admin Panel) + footer fit without scrolling on a standard window. Removed a duplicate `---` divider (the profile-bubble component renders in the main area, leaving two sidebar dividers adjacent). CSS injected at top of sidebar: `stVerticalBlock gap: 0.45rem`, `hr margin: 0.35rem 0`, sidebar `padding-top: 1rem`. Do NOT re-add a second divider between the MAT logo and the API status block.
 
 **Verified in browser (2026-06-11):** login screen → Google button → email entry → logged in as Admin → Sign out → returns to login screen and stays (no bounce). ✅
@@ -882,10 +888,25 @@ Both the Jira MCP and Drive MCP are already available in this Claude session —
 
 **⚠️ IMPORTANT — editing `auth.py` requires a Streamlit server restart.** `auth.py` is an imported module; Python caches it for the process lifetime. Only the main `app.py` re-runs on browser refresh. After ANY change to `auth.py` (or `.streamlit/config.toml`), restart: `streamlit run app.py`. Symptom if forgotten: `ImportError: cannot import name '...' from 'auth'`.
 
-#### Phase 2 — Persistent Tickets (~1 day)
-- [ ] Add `tickets` and `approvals` tables to DB
-- [ ] "Submit for Approval" writes to DB (replaces / supplements Gmail)
-- [ ] Approval Gate reads pending approvals from DB
+#### Phase 2 — Persistent campaign database (IN PROGRESS)
+
+**Architecture — shared DB layer + relational design (built 2026-06-11):**
+- `db.py` — single shared `engine` + `metadata` for ALL tables. SQLite locally (no `DATABASE_URL`), Postgres/Supabase on cloud. `init_db()` imports all table modules and `create_all()`s. Every new table module imports `engine, metadata, now_iso` from `db`.
+- **Universal join key = `campaign_uid`** (surrogate PK on `campaigns`). Every child table (approvals, audience_files, delivery_metrics, roi_metrics, notifications, email_log, audit_log, knowledge_entries) carries `campaign_uid` FK → campaigns. `users` links via email (`created_by`/`assigned_to`).
+- Three **business lookup keys** on campaigns (unique, human-facing): `opm_ticket`, `wf_number`, `campaign_id`.
+- **Snapshot + history pattern:** denormalized snapshot columns live on `campaigns` (e.g. `approval_status`, `t1_report_sent_at`) for fast lookup + the scheduled flow; child tables hold full history/detail.
+
+**`campaigns` table = master spreadsheet migrated 1:1** (`campaigns.py`). Columns: campaign_uid (PK) + the 22 sheet columns (opm_ticket, wf_number, client, campaign_name, campaign_type, channel, brd_link, intake_date, notebook_link, approval_subject_line, approval_sent_at, approval_status, approval_updated_at, approval_recipients, campaign_id, launch_date, t1_report_sent_at, t2_report_sent_at, roi_report_generated_at, row_created_at, last_updated_at, created_by). Master sheet: `1Mbui5tDyXPkYdrbIg7EdiCeFifN1Vsdj24S-FMK4MiI` (migrate, not sync — app is source of truth). Sheet was empty (headers only) → no data import needed.
+
+Functions: `get_campaign_by_ticket/wf/campaign_id`, `find_campaign(query)` (flexible: tries all three), `upsert_campaign(dict)`, `update_campaign(uid, **)`, `list_campaigns`, `list_campaigns_by_user`. ✅ Verified against Supabase + local SQLite.
+
+**Full table catalog (tiered):** Tier1 = users✅, campaigns✅, client_config, approvals, audience_files · Tier2 = delivery_metrics, roi_metrics · Tier3 = audit_log, notifications, email_log, knowledge_entries · Tier4 = scheduled_jobs. PII RULE: member/audience data NEVER stored — only counts + Drive links (audience_files).
+
+**Remaining Phase 2:**
+- [ ] Wire Jira Intake → `upsert_campaign()` on confirm
+- [ ] Wire Monitoring/ROI → `find_campaign()` lookup by ticket/WF/campaign_id
+- [ ] Build Tier 1 child tables: `client_config`, `approvals`, `audience_files`
+- [ ] Then Tier 2 (delivery_metrics, roi_metrics), Tier 3, Tier 4
 
 #### Phase 3 — Dashboards (~2 days)
 - [ ] Add Page 0 — Dashboard (role-aware landing page)

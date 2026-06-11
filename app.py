@@ -319,6 +319,17 @@ else:
             cookie_key=os.environ.get("COOKIE_SECRET", "mat_cookie_secret"),
             cookie_expiry_days=1,
         )
+        # Disable PKCE on the underlying OAuth flow. The redirect back from
+        # Google lands in a FRESH Streamlit session, so the code_verifier
+        # generated before the redirect is lost → token exchange fails with
+        # "(invalid_grant) Missing code verifier" (newer google-auth-oauthlib
+        # enables PKCE by default). Web-app clients authenticate with the
+        # client_secret, so PKCE is safely optional here.
+        try:
+            _authenticator.flow.autogenerate_code_verifier = False
+            _authenticator.flow.code_verifier = None
+        except Exception:
+            pass
         _authenticator.check_authentification()
     except Exception as _auth_err:
         st.error(f"⚠️ Auth initialisation error: {_auth_err}")
