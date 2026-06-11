@@ -46,3 +46,23 @@ def init_db():
     import audience_files  # noqa: F401  audience file refs (Drive links + counts, no PII)
     import notifications   # noqa: F401  in-app notifications (dashboard)
     metadata.create_all(engine)
+    _migrate()
+
+
+def _migrate():
+    """Additive column migrations for tables that already exist.
+    create_all() only creates missing TABLES — it never adds columns.
+    Each statement is idempotent via try/except (column already exists)."""
+    from sqlalchemy import text
+    stmts = [
+        "ALTER TABLE approvals ADD COLUMN report_html TEXT",
+        "ALTER TABLE campaigns ADD COLUMN repull_date TEXT",
+        "ALTER TABLE campaigns ADD COLUMN repull_requested_by TEXT",
+        "ALTER TABLE campaigns ADD COLUMN repull_requested_at TEXT",
+    ]
+    for s in stmts:
+        try:
+            with engine.begin() as c:
+                c.execute(text(s))
+        except Exception:
+            pass  # column already exists

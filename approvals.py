@@ -17,22 +17,24 @@ approvals = Table(
     Column("opm_ticket",   String),          # denormalised for easy lookup
     Column("requested_by", String),          # → users.email
     Column("assigned_to",  String),          # approver → users.email
-    Column("status",       String),          # Pending / Approved / Rejected
+    Column("status",       String),          # Pending / Approved / Rejected / Repull Requested
     Column("requested_at", String),
     Column("acted_at",     String),
     Column("notes",        Text),
     Column("report_ref",   String),          # optional link to the approval report
+    Column("report_html",  Text),            # full audience summary report (HTML)
 )
 
 
 def create_approval(campaign_uid: str, opm_ticket: str, requested_by: str,
-                    assigned_to: str, report_ref: str = "") -> str:
+                    assigned_to: str, report_ref: str = "", report_html: str = "") -> str:
     uid = uuid.uuid4().hex
     with engine.begin() as c:
         c.execute(insert(approvals).values(
             approval_uid=uid, campaign_uid=campaign_uid, opm_ticket=opm_ticket,
             requested_by=requested_by, assigned_to=assigned_to, status="Pending",
             requested_at=now_iso(), acted_at="", notes="", report_ref=report_ref,
+            report_html=report_html or "",
         ))
     return uid
 

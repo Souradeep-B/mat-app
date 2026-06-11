@@ -39,6 +39,10 @@ campaigns = Table(
     Column("row_created_at",          String),
     Column("last_updated_at",         String),
     Column("created_by",              String),                     # → users.email
+    # Repull request (set by the approver; picked up by the scheduled flow)
+    Column("repull_date",             String),
+    Column("repull_requested_by",     String),
+    Column("repull_requested_at",     String),
 )
 
 # All spreadsheet columns (excludes the surrogate PK + bookkeeping timestamps)
@@ -48,7 +52,7 @@ _DATA_COLS = [
     "approval_subject_line", "approval_sent_at", "approval_status",
     "approval_updated_at", "approval_recipients", "campaign_id", "launch_date",
     "t1_report_sent_at", "t2_report_sent_at", "roi_report_generated_at",
-    "created_by",
+    "created_by", "repull_date", "repull_requested_by", "repull_requested_at",
 ]
 
 

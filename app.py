@@ -1051,6 +1051,8 @@ if selected == "🏠 Dashboard":
         st.markdown("### 📥 Approvals waiting for you")
         if not _dash_pending:
             st.caption("Nothing pending — all clear.")
+        import base64 as _b64mod
+        import datetime as _dt
         for _ap in _dash_pending:
             _ap_camp = get_campaign_by_uid(_ap.get("campaign_uid", "")) or {}
             with st.container(border=True):
@@ -1097,6 +1099,65 @@ if selected == "🏠 Dashboard":
                             )
                         except Exception as _e:
                             st.error(f"Could not record the decision: {_e}")
+                        st.rerun()
+
+                # ── Row 2: report link + repull request ──────────────────────
+                _rl, _rd, _rb, _ = st.columns([2.2, 1.4, 1.5, 0.9])
+                with _rl:
+                    _rep_html = _ap.get("report_html") or ""
+                    if _rep_html.strip():
+                        # Open the full audience summary report in a NEW TAB.
+                        # A blob URL is built client-side from the stored HTML —
+                        # the anchor click is a user gesture, so no popup block.
+                        _rep_b64 = _b64mod.b64encode(_rep_html.encode("utf-8")).decode()
+                        st.components.v1.html(f"""
+                        <a id="rep_{_ap['approval_uid']}" target="_blank"
+                           style="display:inline-block;font-family:'Segoe UI',sans-serif;
+                                  font-size:13px;font-weight:600;color:#007B8F;
+                                  text-decoration:none;border:1px solid #D7DEE6;
+                                  border-radius:8px;padding:8px 14px;background:#fff;">
+                           📄 Open audience summary report ↗
+                        </a>
+                        <script>
+                          (function() {{
+                            var bytes = Uint8Array.from(atob("{_rep_b64}"), function(ch) {{ return ch.charCodeAt(0); }});
+                            var blob = new Blob([bytes], {{ type: "text/html" }});
+                            document.getElementById("rep_{_ap['approval_uid']}").href = URL.createObjectURL(blob);
+                          }})();
+                        </script>
+                        """, height=44)
+                    else:
+                        st.caption("No report attached to this request.")
+                with _rd:
+                    _rp_date = st.date_input(
+                        "Repull date",
+                        value=_dt.date.today() + _dt.timedelta(days=1),
+                        min_value=_dt.date.today(),
+                        key=f"dash_rpd_{_ap['approval_uid']}",
+                        label_visibility="collapsed",
+                        help="Date the audience should be re-pulled",
+                    )
+                with _rb:
+                    if st.button("🔁 Request repull", key=f"dash_rp_{_ap['approval_uid']}",
+                                 use_container_width=True):
+                        try:
+                            _rp_str = _rp_date.strftime("%Y-%m-%d")
+                            approvals_db.set_status(_ap["approval_uid"], "Repull Requested",
+                                                    notes=f"Repull on {_rp_str}")
+                            if _ap.get("campaign_uid"):
+                                update_campaign(_ap["campaign_uid"],
+                                                approval_status="Repull Requested",
+                                                approval_updated_at=now_iso(),
+                                                repull_date=_rp_str,
+                                                repull_requested_by=_me,
+                                                repull_requested_at=now_iso())
+                            notifications_db.notify(
+                                _ap.get("requested_by", ""), _ap.get("campaign_uid", ""),
+                                _ap.get("opm_ticket", ""),
+                                f"🔁 {_ap.get('opm_ticket', 'Campaign')}: repull requested for {_rp_str} by {_me}",
+                            )
+                        except Exception as _e:
+                            st.error(f"Could not record the repull request: {_e}")
                         st.rerun()
         st.markdown("---")
 
@@ -2208,6 +2269,7 @@ elif selected == "3. Approval Gate":
                     _current_user.get("email", ""),
                     _ag_inapp_approver,
                     subject_line,
+                    report_html=stub_html,   # approver can open the full report from their dashboard
                 )
                 st.session_state["ag_approval_uid"] = _ap_uid
                 update_campaign(
@@ -2240,13 +2302,40 @@ elif selected == "3. Approval Gate":
         st.markdown("---")
         st.markdown("### Section 3 — Approval Status")
 
+        # Live-sync from the DB: the approver acts from THEIR dashboard in a
+        # different session, so the requester's page must poll the database.
+        _ap_uid_live = st.session_state.get("ag_approval_uid")
+        _ap_row_live = None
+        if _ap_uid_live:
+            try:
+                _ap_row_live = approvals_db.get_approval(_ap_uid_live)
+                if _ap_row_live and _ap_row_live.get("status") and _ap_row_live["status"] != "Pending":
+                    st.session_state["ag_status"] = _ap_row_live["status"]
+            except Exception:
+                pass
+
         status = st.session_state["ag_status"]
         if status == "Awaiting":
             st.warning(f"🟡 Awaiting approval — sent at {st.session_state['ag_sent_at']}")
+            st.caption("⏳ This status checks for the approver's decision every 10 seconds.")
+            # Re-run the page every 10s while we wait for the decision
+            try:
+                from streamlit_autorefresh import st_autorefresh
+                st_autorefresh(interval=10_000, key="ag_status_poll")
+            except ImportError:
+                st.components.v1.html(
+                    "<script>setTimeout(function(){window.parent.location.reload();}, 10000);</script>",
+                    height=0,
+                )
         elif status == "Approved":
-            st.success("✅ Approved")
+            _by = f" by **{_ap_row_live['assigned_to']}**" if _ap_row_live and _ap_row_live.get("assigned_to") else ""
+            _at = f" · {_ap_row_live['acted_at'][:16]}" if _ap_row_live and _ap_row_live.get("acted_at") else ""
+            st.success(f"✅ Approved{_by}{_at}")
         elif status == "Rejected":
             st.error("❌ Rejected — no further action taken")
+        elif status == "Repull Requested":
+            _note = f" — {_ap_row_live['notes']}" if _ap_row_live and _ap_row_live.get("notes") else ""
+            st.info(f"🔁 Repull requested by the approver{_note}. The scheduled flow will pick it up.")
 
         st.caption("Manual override (for testing):")
         col_app, col_rej, _ = st.columns([1.6, 1.6, 2.8])
