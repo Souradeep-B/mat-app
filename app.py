@@ -329,6 +329,19 @@ if _logging_out:
     for _k in ["auth_user", "connected", "user_info", "_demo_step"]:
         st.session_state.pop(_k, None)
     st.query_params.clear()
+    # Hard-delete BOTH auth cookies in the parent document immediately.
+    # The OAuth library deletes its mat_session cookie via an async component;
+    # check_authentification() can re-read the still-present cookie on the
+    # next rerun and silently log the user back in (~3s later). Deleting
+    # synchronously via JS kills that race for good.
+    st.components.v1.html(
+        f"""<script>
+        var d = window.parent.document;
+        d.cookie = 'mat_session=; path=/; max-age=0; SameSite=Lax';
+        d.cookie = '{COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax';
+        </script>""",
+        height=0,
+    )
 
 # ── Restore session from the signed cookie (survives browser refresh) ─────────
 # A hard refresh starts a NEW Streamlit session, so session_state is empty.
@@ -515,7 +528,11 @@ else:
             cookie_key=os.environ.get("COOKIE_SECRET", "mat_cookie_secret"),
             cookie_expiry_days=1,
         )
-        _authenticator.check_authentification()
+        # On the logout run, do NOT re-read the auth cookie — the JS deletion
+        # above hasn't reached the browser yet; reading now would log the
+        # user straight back in.
+        if not _logging_out:
+            _authenticator.check_authentification()
     except Exception as _auth_err:
         st.error(f"⚠️ Auth initialisation error: {_auth_err}")
         st.stop()
@@ -1119,19 +1136,11 @@ Do not include any explanation — return the JSON only."""
 
     # ══ METHOD B — Upload BRD PDF ═════════════════════════════════════════════
     else:
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            uploaded_pdf = st.file_uploader(
-                "Upload BRD PDF",
-                type=["pdf"],
-                help="Upload the campaign BRD as a PDF. The app will read and summarise it."
-            )
-        with col2:
-            ticket_override = st.text_input(
-                "OPM Ticket Number (optional)",
-                placeholder="e.g. OPM-67",
-                help="Add the ticket number if known — used for file naming"
-            )
+        uploaded_pdf = st.file_uploader(
+            "Upload BRD PDF",
+            type=["pdf"],
+            help="Upload the campaign BRD as a PDF. The app will read and summarise it."
+        )
 
         if uploaded_pdf is not None:
             st.markdown("---")
@@ -1162,10 +1171,7 @@ Fill each field from the BRD. Use empty string if not specified. Return JSON onl
                     _claude_pdf = _call_claude_with_pdf(_pdf_prompt, _pdf_bytes)
                     st.session_state[_pdf_cache_key] = _parse_brd_json(_claude_pdf, stub_summary)
 
-                # Make a copy; inject ticket number if provided by the user
                 _pdf_active_summary = dict(st.session_state[_pdf_cache_key])
-                if ticket_override.strip():
-                    _pdf_active_summary["OPM Ticket"] = ticket_override.strip()
                 st.session_state["_brd_active_summary"] = _pdf_active_summary
                 st.write("✅ BRD parsed by Claude.")
                 status.update(label="BRD read complete — review the summary below.", state="complete")
